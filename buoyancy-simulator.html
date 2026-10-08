@@ -1,0 +1,911 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Buoyancy Tank</title>
+<meta name="description" content="Drag a block into a tank of water and watch the buoyant force and gravity force change.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1f2a37;
+    --muted:#5b6574;
+    --paper:#f7f3ea;
+    --panel:#ffffff;
+    --line:#e3dccd;
+    --red:#d23f36;
+    --red-soft:#fbe9e7;
+    --blue:#1d67c9;
+    --blue-soft:#e6f0fc;
+    --green:#23855a;
+    --purple:#7c46c9;
+    --gray:#5f6b7a;
+    --accent:#e7962b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Nunito",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    font-size:16px;
+    line-height:1.45;
+  }
+  .wrap{max-width:1160px;margin:0 auto;padding:20px 16px 32px}
+  header h1{font-size:clamp(1.6rem,3.5vw,2.2rem);font-weight:800;margin:0 0 4px;letter-spacing:-.01em}
+  header p{margin:0 0 18px;color:var(--muted);max-width:60ch}
+  .layout{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+  .stage{flex:1 1 560px;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:10px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .canvas-wrap{position:relative;container-type:inline-size}
+  .scene-clip{overflow:hidden;border-radius:10px}
+  .scene{position:relative;margin-top:-13%}   /* narrow: sliders sit below, so hide the empty top band (104/800) */
+  .sim-controls{
+    display:grid;grid-template-columns:1fr 1fr;gap:6px 22px;
+    margin-top:8px;padding:10px 14px;border-radius:12px;background:#f2f5f9;border:1px solid #dde5ee;
+  }
+  .sim-controls .ctl label{display:flex;justify-content:space-between;align-items:baseline;font-weight:800;font-size:.95rem}
+  .sim-controls .ctl label span{color:var(--muted);font-weight:700;font-size:.75rem;margin-left:.4em}
+  .sim-controls output{font-variant-numeric:tabular-nums;font-weight:800;color:var(--ink);font-size:1rem}
+  .sim-controls input[type=range]{height:26px;margin:2px 0 0}
+  @container (min-width:600px){
+    .scene{margin-top:0}
+    .sim-controls{
+      position:absolute;left:1.5%;right:1.5%;top:1.4%;margin:0;padding:7px 16px 5px;
+      background:rgba(255,255,255,.86);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);
+      box-shadow:0 2px 8px rgba(0,0,0,.08);
+    }
+  }
+  @container (max-width:420px){ .sim-controls{grid-template-columns:1fr} }
+  .tank-btn{
+    position:absolute;transform:translateY(-50%);
+    font-size:clamp(.72rem,1.6vw,.95rem);padding:.45em .8em;border-radius:999px;
+    box-shadow:0 2px 6px rgba(0,0,0,.12);white-space:nowrap;
+  }
+  .tank-btn::before{content:"";display:inline-block;width:.6em;height:.6em;border-radius:50%;background:#d23f36;margin-right:.45em;vertical-align:.05em}
+  .tank-btn[aria-pressed="true"]::before{background:#23855a}
+  #drain{right:1.5%}
+  canvas{display:block;width:100%;height:auto;aspect-ratio:800/824;touch-action:none;border-radius:10px;outline:none}
+  canvas:focus-visible{box-shadow:0 0 0 3px var(--accent)}
+  .panel{flex:0 1 340px;width:100%;display:flex;flex-direction:column;gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px}
+  .card h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 10px;font-weight:800}
+  .forces{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .force{border-radius:12px;padding:10px 12px}
+  .force .fl{display:block;font-weight:800;font-size:.9rem}
+  .force .fv{display:block;font-size:1.75rem;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.15}
+  .force .fd{display:block;font-size:.8rem;color:var(--muted)}
+  .force.grav{background:var(--red-soft);color:var(--red)}
+  .force.buoy{background:var(--blue-soft);color:var(--blue)}
+  .status{margin-top:10px;padding:8px 12px;border-radius:10px;background:#f3efe6;font-weight:700;text-align:center}
+  .row{margin-bottom:14px}
+  .row:last-child{margin-bottom:0}
+  .row label{display:flex;justify-content:space-between;align-items:baseline;font-weight:700;margin-bottom:4px}
+  .row output{font-variant-numeric:tabular-nums;color:var(--ink);font-weight:800}
+  input[type=range]{width:100%;accent-color:var(--accent);height:28px}
+  .stats{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:.95rem}
+  .stats dt{color:var(--muted)}
+  .stats dd{margin:0;font-weight:800;font-variant-numeric:tabular-nums;text-align:right}
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+  button{
+    font:inherit;font-weight:800;cursor:pointer;border-radius:10px;padding:10px 12px;
+    border:2px solid var(--line);background:#fff;color:var(--ink);transition:background .15s,border-color .15s;
+  }
+  button:hover{border-color:#cbbfa6}
+  button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+  button[aria-pressed="true"]{background:#dff3e8;border-color:var(--green);color:#145c3c}
+  .toggle{display:flex;gap:8px;align-items:center;font-weight:700;cursor:pointer}
+  .toggle input{width:18px;height:18px;accent-color:var(--accent)}
+  .reset{width:100%;margin-top:12px}
+  footer{margin-top:18px;color:var(--muted);font-size:.85rem}
+  @media (max-width:640px){
+    .wrap{padding:14px 16px 24px}
+    .stage{padding:6px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Buoyancy Tank</h1>
+    <p>Grab the block and push it into the water. Change how heavy and how big it is, fill or drain the tank, and watch the two forces.</p>
+  </header>
+
+  <div class="layout">
+    <section class="stage" aria-label="Water tank simulation">
+      <div class="canvas-wrap">
+        <div class="scene-clip"><div class="scene">
+          <canvas id="scene" width="800" height="824" tabindex="0"
+            aria-label="A tank of water with a block you can drag. Use the arrow keys to move the block when the tank is focused."></canvas>
+          <button id="spigot" class="tank-btn" type="button" aria-pressed="false">Turn on spigot</button>
+          <button id="drain" class="tank-btn" type="button" aria-pressed="false">Open drain</button>
+        </div></div>
+        <div class="sim-controls">
+          <div class="ctl">
+            <label for="mass">Mass <output id="massOut" for="mass">2.0 kg</output></label>
+            <input id="mass" type="range" min="0" max="1000" step="1" value="500">
+          </div>
+          <div class="ctl">
+            <label for="vol">Volume (size) <output id="volOut" for="vol">4.0 L</output></label>
+            <input id="vol" type="range" min="0" max="1000" step="1" value="500">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <div class="card" aria-live="polite">
+        <h2>Forces on the block</h2>
+        <div class="forces">
+          <div class="force grav"><span class="fl">Gravity force</span><span class="fv" id="fg">0 N</span><span class="fd">pulls down</span></div>
+          <div class="force buoy"><span class="fl">Buoyant force</span><span class="fv" id="fb">0 N</span><span class="fd">pushes up</span></div>
+        </div>
+        <div class="status" id="status">—</div>
+      </div>
+
+      <div class="card">
+        <h2>The block</h2>
+        <dl class="stats">
+          <dt>Density</dt><dd id="dens">—</dd>
+          <dt>Volume underwater</dt><dd id="sub">—</dd>
+        </dl>
+      </div>
+
+      <div class="card">
+        <h2>The water</h2>
+        <dl class="stats">
+          <dt>Water in tank</dt><dd id="water">—</dd>
+          <dt>Water level</dt><dd id="level">—</dd>
+        </dl>
+      </div>
+
+      <div class="card">
+        <label class="toggle"><input id="extra" type="checkbox" checked> Also show the floor's push and your hand's push</label>
+        <button id="reset" class="reset" type="button">Reset</button>
+      </div>
+    </aside>
+  </div>
+
+  <footer>1 liter of water has a mass of 1 kg · Gravity pulls with 9.8 N on every kg · Tank: 60 cm wide, 30 cm front-to-back, 50 cm tall (holds 90 L)</footer>
+</div>
+
+<script>
+(() => {
+  // ---------- World setup (lengths in decimeters: 1 dm = 10 cm, 1 dm³ = 1 L) ----------
+  const BAND = 104;                // empty sky band at the top where the sliders sit
+  const W = 800, H = 720 + BAND;   // drawing size in logical pixels
+  const PX = 80;                   // pixels per decimeter
+  const TW = 6, TD = 3, TH = 5;    // tank inner width, depth, height (dm)
+  const AREA = TW * TD;            // tank floor area (dm²) -> 18 L per dm of height
+  const TX = 100;                  // x of tank's inner left wall
+  const FLOOR = 560 + BAND;        // y of tank's inner floor
+  const WALL = 9;
+  const TOP_LIMIT = (FLOOR - BAND - 8) / 80; // highest the block's top can be dragged (dm above floor)
+  const G = 9.8;                   // N per kg
+  const RHO_W = 1.0;               // kg per L
+  const FLOW_IN = 3.0;             // L per second from the spigot
+  const PIPE_Y = 104 + BAND;        // spigot pipe height
+  const SPIGOT_HANDLE = { x: TX + 68 - 52, y: PIPE_Y - 18 };       // clickable spigot handle
+  const DRAIN_VALVE = { x: TX + 480 + 9 + 26, y: FLOOR - 22 + 9 }; // clickable drain valve
+  // Slider ranges (logarithmic, so both tiny and giant are easy to reach)
+  const M_MIN = 0.005, M_MAX = 50;   // kg  (5 g to 50 kg)
+  const V_MIN = 0.005, V_MAX = 27;   // L   (5 mL to 27 L; 27 L is a 30 cm cube, as deep as the tank)
+
+  const DEFAULTS = { m: 2, V: 4, Vw: 40, x: 3.6, yb: 3.9 };
+  const st = {
+    m: DEFAULTS.m, V: DEFAULTS.V, Vw: DEFAULTS.Vw,
+    x: DEFAULTS.x, yb: DEFAULTS.yb, v: 0,
+    dragging: false, offX: 0, offY: 0,
+    spigot: false, drain: false,
+    h: 0, sub: 0, overflowT: 0, t: 0, ripple: 0
+  };
+
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // ---------- Elements ----------
+  const $ = id => document.getElementById(id);
+  const canvas = $('scene'), ctx = canvas.getContext('2d');
+  const massIn = $('mass'), volIn = $('vol');
+  const spigotBtn = $('spigot'), drainBtn = $('drain'), extraIn = $('extra');
+
+  const side = () => Math.cbrt(st.V);
+
+  // ---------- Number formatting ----------
+  function num(v) {               // sensible decimals for any size of number
+    const a = Math.abs(v);
+    if (a === 0) return '0';
+    if (a >= 100) return v.toFixed(0);
+    if (a >= 10) return v.toFixed(1);
+    if (a >= 1) return v.toFixed(2);
+    if (a >= 0.1) return v.toFixed(3);
+    return v.toPrecision(2);
+  }
+  const fmtN = F => `${num(F)} N`;
+  function short(v) {             // for slider values already rounded to 2 significant figures
+    return v >= 10 ? v.toFixed(0) : v >= 1 ? v.toFixed(1) : v >= 0.1 ? v.toFixed(2) : v.toFixed(3);
+  }
+  const fmtMass = m => m < 1 ? `${short(m * 1000)} g` : `${short(m)} kg`;
+  const fmtVol = V => V < 1 ? `${short(V * 1000)} mL` : `${short(V)} L`;
+  function fmtVolLong(V) { return V < 1 ? `${num(V * 1000)} mL` : `${num(V)} L`; }
+  const sig2 = v => Number(v.toPrecision(2));
+  const toVal = (pos, lo, hi) => sig2(lo * Math.pow(hi / lo, pos / 1000));
+  const toPos = (val, lo, hi) => Math.round(1000 * Math.log(val / lo) / Math.log(hi / lo));
+
+  // ---------- Physics ----------
+  // Water level given water volume and block position (block is a cube of side s).
+  function solveWater(Vw, yb, s) {
+    const a = s * s;
+    const h0 = Vw / AREA;
+    if (h0 <= yb) return { h: h0, sub: 0 };                 // block entirely above water
+    const hFull = (Vw + a * s) / AREA;
+    if (hFull >= yb + s) return { h: hFull, sub: s };        // block entirely under water
+    const h = (Vw - a * yb) / (AREA - a);                    // water line crosses the block
+    return { h, sub: h - yb };
+  }
+
+  function settleWater() {
+    const s = side();
+    let r = solveWater(st.Vw, st.yb, s);
+    let spilled = false;
+    for (let i = 0; i < 5 && r.h > TH + 1e-9; i++) {
+      const partial = r.sub > 0 && r.sub < s;
+      st.Vw -= (r.h - TH) * (partial ? AREA - s * s : AREA);
+      spilled = true;
+      r = solveWater(st.Vw, st.yb, s);
+    }
+    if (st.Vw < 0) st.Vw = 0;
+    st.h = Math.min(r.h, TH);
+    st.sub = Math.max(0, Math.min(s, r.sub));
+    if (spilled) st.overflowT = 1.0;
+  }
+
+  function forces() {
+    const s = side();
+    const Vsub = s * s * st.sub;
+    return { Fg: st.m * G, Fb: RHO_W * Vsub * G, Vsub };
+  }
+
+  function clampBlock() {
+    const s = side();
+    st.x = Math.max(s / 2, Math.min(TW - s / 2, st.x));
+    st.yb = Math.max(0, Math.min(TOP_LIMIT - s, st.yb));
+  }
+
+  function physicsStep(dt) {
+    const s = side();
+    settleWater();
+    const { Fg, Fb, Vsub } = forces();
+    const frac = st.sub / s;
+    const sm = s / 10;                         // side in meters
+    const vm = st.v / 10;                      // speed in m/s
+    // Water moving with the block makes it act a bit heavier when accelerating ("added mass").
+    const mEff = st.m + 0.5 * RHO_W * Vsub;
+    let c = 0.02;                              // tiny air drag
+    if (frac > 0) {
+      const k = 1000 * G * sm * sm;            // bobbing stiffness of the water surface (N/m)
+      const linear = 2 * 0.4 * Math.sqrt(k * mEff) * Math.max(frac, 0.3);
+      const quad = 0.5 * 1000 * 1.2 * sm * sm * frac * Math.abs(vm);
+      c = (linear + quad) / mEff;
+    }
+    const a = (Fb - Fg) / mEff;                // m/s²
+    st.v = (st.v + a * 10 * dt) / (1 + c * dt); // dm/s, damping applied implicitly (stable)
+    st.yb += st.v * dt;
+    if (st.yb <= 0) { st.yb = 0; if (st.v < 0) st.v = 0; }
+    const maxYb = Math.max(TOP_LIMIT - s, TH);
+    if (st.yb >= maxYb) { st.yb = maxYb; if (st.v > 0) st.v = 0; }
+    // Once a floating block has essentially stopped bobbing, set it exactly at its balance point,
+    // so buoyancy equals gravity exactly instead of creeping toward it.
+    const subEq = st.m / (RHO_W * s * s);
+    if (subEq < s && frac > 0 && frac < 1 && st.yb > 1e-4 && Math.abs(st.v) < 0.05 && Math.abs(Fb - Fg) < 0.005 * Fg) {
+      const hEq = (st.Vw + s * s * subEq) / AREA;
+      if (hEq - subEq > 0 && hEq <= TH) { st.yb = hEq - subEq; st.v = 0; }
+    }
+  }
+
+  function update(dt) {
+    st.t += dt;
+    settleWater();
+    const s = side();
+    // A floating block rises and falls with the water surface, so the amount underwater
+    // (and the buoyant force) stays the same while the spigot or drain is running.
+    const floating = !st.dragging && st.sub > 0 && st.sub < s && st.yb > 1e-4;
+    const subBefore = st.sub;
+    let dV = 0;
+    if (st.spigot) dV += FLOW_IN * dt;
+    if (st.drain && st.Vw > 0) dV -= Math.max(0.8, 1.8 * Math.sqrt(Math.max(st.h, 0))) * dt;
+    st.Vw = Math.max(0, st.Vw + dV);
+    if (floating && dV !== 0) {
+      const cap = TH * AREA - s * s * subBefore;          // most water that fits with the block floating
+      if (st.Vw > cap) { st.Vw = cap; st.overflowT = 1.0; }
+      const h = (st.Vw + s * s * subBefore) / AREA;
+      st.yb = Math.max(0, h - subBefore);
+    }
+    if (st.dragging) {
+      st.v = 0;
+      settleWater();
+    } else {
+      const n = 8;
+      for (let i = 0; i < n; i++) physicsStep(dt / n);
+    }
+    settleWater();
+    if (st.overflowT > 0) st.overflowT -= dt;
+    st.ripple = st.ripple * Math.exp(-2.5 * dt) + Math.min(Math.abs(st.v), 6) * 0.05 * (st.sub > 0 && st.sub < side() ? 1 : 0);
+  }
+
+  // ---------- Coordinates ----------
+  const xPx = dm => TX + dm * PX;
+  const yPx = dm => FLOOR - dm * PX;
+  function blockRect() {
+    const s = side(), w = s * PX;
+    return { x: xPx(st.x - s / 2), y: yPx(st.yb + s), w, h: w };
+  }
+
+  // ---------- Drawing helpers ----------
+  function rr(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  let UI = 1; // enlarges canvas text on small screens
+  const FONT = '"Nunito", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+
+  function drawBackground() {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#eaf3fb');
+    g.addColorStop(0.75, '#f6f1e6');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    // table
+    ctx.fillStyle = '#c9a77c';
+    ctx.fillRect(0, FLOOR + WALL, W, 16);
+    ctx.fillStyle = '#b08d62';
+    ctx.fillRect(0, FLOOR + WALL + 16, W, 4);
+    ctx.fillStyle = '#ece3d3';
+    ctx.fillRect(0, FLOOR + WALL + 20, W, H - (FLOOR + WALL + 20));
+  }
+
+  function drawTankBack() {
+    ctx.fillStyle = 'rgba(214,232,244,0.55)';
+    ctx.fillRect(xPx(0), yPx(TH), TW * PX, TH * PX);
+  }
+
+  function drawTicks() {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(40,70,100,0.55)';
+    ctx.fillStyle = 'rgba(40,70,100,0.75)';
+    ctx.font = `700 ${12 * UI}px ${FONT}`;
+    ctx.textBaseline = 'middle';
+    for (let L = 5; L <= 90; L += 5) {
+      const y = yPx(L / AREA);
+      const major = L % 10 === 0;
+      ctx.lineWidth = major ? 2 : 1;
+      ctx.beginPath();
+      ctx.moveTo(xPx(TW), y);
+      ctx.lineTo(xPx(TW) - (major ? 14 : 8), y);
+      ctx.stroke();
+      if (major) {
+        ctx.textAlign = 'right';
+        ctx.fillText(`${L} L`, xPx(TW) - 16 - 2 * UI, y);
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawBlock() {
+    const r = blockRect();
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.18)';
+    ctx.shadowBlur = st.dragging ? 14 : 6;
+    ctx.shadowOffsetY = st.dragging ? 6 : 2;
+    rr(r.x, r.y, r.w, r.h, 6);
+    const g = ctx.createLinearGradient(r.x, r.y, r.x + r.w, r.y + r.h);
+    g.addColorStop(0, '#f6b955');
+    g.addColorStop(1, '#e58e2a');
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.lineWidth = r.w > 26 ? 3 : 2;
+    ctx.strokeStyle = '#a95f12';
+    ctx.stroke();
+    // inner bevel
+    if (r.w > 26) {
+      rr(r.x + 6, r.y + 6, r.w - 12, r.h - 12, 4);
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+      ctx.stroke();
+    }
+    // a dashed ring so a very small block is easy to find
+    if (r.w < 30) {
+      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(169,95,18,0.85)';
+      ctx.beginPath(); ctx.arc(r.x + r.w / 2, r.y + r.h / 2, 24, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+  }
+
+  // light blue tint over the underwater part of the block (block is drawn in front of the water)
+  function drawBlockTint() {
+    if (st.sub <= 0) return;
+    const r = blockRect();
+    const top = Math.max(r.y, yPx(st.h));
+    ctx.save();
+    rr(r.x, r.y, r.w, r.h, 6);
+    ctx.clip();
+    ctx.fillStyle = 'rgba(40,120,210,0.22)';
+    ctx.fillRect(r.x, top, r.w, r.y + r.h - top);
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    ctx.lineWidth = 2;
+    if (top > r.y + 1) { ctx.beginPath(); ctx.moveTo(r.x, top); ctx.lineTo(r.x + r.w, top); ctx.stroke(); }
+    ctx.restore();
+  }
+
+  function drawWater() {
+    if (st.h <= 0.0005) return;
+    const top = yPx(st.h);
+    const left = xPx(0), right = xPx(TW);
+    const amp = reduceMotion ? 0 : 1.2 + Math.min(st.ripple, 4);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(left, FLOOR);
+    for (let x = left; x <= right; x += 6) {
+      const y = top + amp * Math.sin((x * 0.045) + st.t * 2.4) * 0.6 + amp * Math.sin((x * 0.11) - st.t * 1.7) * 0.4;
+      ctx.lineTo(x, Math.min(FLOOR, y));
+    }
+    ctx.lineTo(right, FLOOR);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(0, top, 0, FLOOR);
+    g.addColorStop(0, 'rgba(70,150,225,0.36)');
+    g.addColorStop(1, 'rgba(25,90,175,0.50)');
+    ctx.fillStyle = g;
+    ctx.fill();
+    // surface line
+    ctx.beginPath();
+    for (let x = left; x <= right; x += 6) {
+      const y = top + amp * Math.sin((x * 0.045) + st.t * 2.4) * 0.6 + amp * Math.sin((x * 0.11) - st.t * 1.7) * 0.4;
+      if (x === left) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawTankWalls() {
+    ctx.save();
+    ctx.fillStyle = '#9fb7c8';
+    ctx.fillRect(xPx(0) - WALL, yPx(TH) - 4, WALL, TH * PX + 4 + WALL);
+    ctx.fillRect(xPx(TW), yPx(TH) - 4, WALL, TH * PX + 4 + WALL);
+    ctx.fillRect(xPx(0) - WALL, FLOOR, TW * PX + 2 * WALL, WALL);
+    // glass highlights
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.fillRect(xPx(0) - WALL + 2, yPx(TH), 2, TH * PX);
+    ctx.fillRect(xPx(TW) + 2, yPx(TH), 2, TH * PX);
+    ctx.restore();
+  }
+
+  function drawSpigot() {
+    const pipeY = PIPE_Y, nozzleX = xPx(0.85);
+    ctx.save();
+    // stream (drawn first so pipe sits on top)
+    if (st.spigot) {
+      const surface = st.h > 0 ? yPx(st.h) : FLOOR;
+      const y0 = pipeY + 44;
+      ctx.fillStyle = 'rgba(60,140,220,0.75)';
+      ctx.fillRect(nozzleX - 5, y0, 10, surface - y0);
+      ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([10, 14]);
+      ctx.lineDashOffset = -st.t * 220;
+      ctx.beginPath();
+      ctx.moveTo(nozzleX - 1, y0);
+      ctx.lineTo(nozzleX - 1, surface);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // splash
+      if (!reduceMotion && st.h > 0) {
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        for (let i = 0; i < 4; i++) {
+          const ph = (st.t * 3 + i * 0.25) % 1;
+          ctx.beginPath();
+          ctx.arc(nozzleX + (i - 1.5) * 9 * ph, surface - 10 * Math.sin(ph * Math.PI), 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+    // pipe
+    ctx.fillStyle = '#8a96a3';
+    rr(0, pipeY, nozzleX + 14, 20, 4); ctx.fill();
+    rr(nozzleX - 12, pipeY, 24, 44, 5); ctx.fill();
+    ctx.fillStyle = '#6f7a86';
+    ctx.fillRect(nozzleX - 14, pipeY + 38, 28, 6);
+    // handle
+    const hx = nozzleX - 52;
+    ctx.fillStyle = '#6f7a86';
+    ctx.fillRect(hx - 3, pipeY - 16, 6, 16);
+    ctx.save();
+    ctx.translate(hx, pipeY - 18);
+    ctx.rotate(st.spigot ? Math.PI / 2 : 0);
+    ctx.fillStyle = st.spigot ? '#23855a' : '#d23f36';
+    rr(-20, -5, 40, 10, 5); ctx.fill();
+    ctx.restore();
+    ctx.restore();
+  }
+
+  function drawDrain() {
+    const py = FLOOR - 22, x0 = xPx(TW) + WALL, x1 = W - 34;
+    ctx.save();
+    // pipe out of the right wall, then down
+    ctx.fillStyle = '#8a96a3';
+    ctx.fillRect(x0, py, x1 - x0 + 14, 18);
+    ctx.fillRect(x1 - 4, py, 18, 70);
+    ctx.fillStyle = '#6f7a86';
+    ctx.fillRect(x1 - 7, py + 66, 24, 6);
+    const flowing = st.drain && st.Vw > 0.01;
+    if (flowing) {
+      ctx.fillStyle = 'rgba(60,140,220,0.85)';
+      ctx.fillRect(x0, py + 4, x1 - x0 + 10, 10);
+      const y0 = py + 72;
+      ctx.fillStyle = 'rgba(60,140,220,0.75)';
+      ctx.fillRect(x1, y0, 10, H - y0);
+      ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([10, 14]);
+      ctx.lineDashOffset = -st.t * 220;
+      ctx.beginPath(); ctx.moveTo(x1 + 4, y0); ctx.lineTo(x1 + 4, H); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    // valve wheel
+    const vx = x0 + 26, vy = py + 9;
+    ctx.save();
+    ctx.translate(vx, vy);
+    ctx.rotate(st.drain ? Math.PI / 4 : 0);
+    ctx.strokeStyle = st.drain ? '#23855a' : '#d23f36';
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(0, 0, 13, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-13, 0); ctx.lineTo(13, 0); ctx.moveTo(0, -13); ctx.lineTo(0, 13); ctx.stroke();
+    ctx.restore();
+    ctx.restore();
+  }
+
+  // Arrows
+  const placed = [];
+  let forceScale = 2.5, legendN = 20;   // pixels per newton; newtons shown by the 50-px legend bar
+  function pickScale() {
+    // Biggest force this block could feel: its weight, or buoyancy when fully underwater.
+    const Fref = Math.max(st.m * G, RHO_W * st.V * G);
+    const raw = 50 * Fref / 140;        // aim for the longest arrow to be at most ~140 px
+    const p = Math.pow(10, Math.floor(Math.log10(raw)));
+    const f = raw / p;
+    legendN = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+    forceScale = 50 / legendN;
+  }
+  function drawLegend() {
+    ctx.save();
+    ctx.font = `800 ${12 * UI}px ${FONT}`;
+    const txt = `= ${num(legendN)} N`;
+    const tw = ctx.measureText(txt).width;
+    const right = W - 52, y = H - 18 * UI;
+    const x0 = right - tw - 8 - 50;
+    ctx.fillStyle = 'rgba(31,42,55,0.65)';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('Arrow scale', x0, y - 18 * UI);
+    ctx.fillStyle = '#1f2a37';
+    ctx.fillRect(x0, y - 3, 50, 6);
+    ctx.fillText(txt, x0 + 58, y);
+    placed.push({ x: x0 - 4, y: y - 28 * UI, w: 50 + tw + 16, h: 36 * UI });
+    ctx.restore();
+  }
+  function arrow(x, y0, newtons, dir, color) {
+    const len = newtons * forceScale;
+    if (len < 1.5) return null;
+    const head = Math.min(16, len * 0.7 + 3);
+    const y1 = y0 + dir * len;
+    const yb = y1 - dir * head;
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    // halo
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 11;
+    ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, yb); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - 11, yb); ctx.lineTo(x, y1); ctx.lineTo(x + 11, yb); ctx.closePath();
+    ctx.lineWidth = 5; ctx.stroke();
+    // body
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, yb); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - 11, yb); ctx.lineTo(x, y1); ctx.lineTo(x + 11, yb); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    return { x, y: y1 };
+  }
+
+  function label(tip, text, color, side, dir, gap, altRight) {
+    if (!tip) return;
+    ctx.save();
+    ctx.font = `800 ${14 * UI}px ${FONT}`;
+    const w = ctx.measureText(text).width + 16, h = 24 * UI;
+    // Try the preferred side first, then the other side of the block, then nudge up/down.
+    const xs = [side > 0 ? tip.x + gap : tip.x - gap - w];
+    if (altRight !== undefined) xs.push(altRight - w);
+    const y0 = tip.y - h / 2 - dir * 4;
+    const clampX = v => Math.max(4, Math.min(W - w - 4, v));
+    const clampY = v => Math.max(4, Math.min(H - h - 4, v));
+    const free = (x, y) => !placed.some(p => x < p.x + p.w && x + w > p.x && y < p.y + p.h && y + h > p.y);
+    let x = clampX(xs[0]), y = clampY(y0), found = false;
+    for (const n of [0, 1, -1, 2, -2, 3, -3]) {
+      for (const cx0 of xs) {
+        const tx = clampX(cx0), ty = clampY(y0 + n * (h + 4) * (dir < 0 ? 1 : -1));
+        if (free(tx, ty)) { x = tx; y = ty; found = true; break; }
+      }
+      if (found) break;
+    }
+    placed.push({ x, y, w, h });
+    rr(x, y, w, h, 8);
+    ctx.fillStyle = 'rgba(255,255,255,0.94)';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x + 8, y + h / 2 + 1);
+    ctx.restore();
+  }
+
+  const tankBtns = [];
+  function drawForces() {
+    placed.length = 0;
+    const cr = canvas.getBoundingClientRect();
+    if (cr.width > 0) {
+      const k = W / cr.width;
+      for (const b of tankBtns) {
+        const r = b.getBoundingClientRect();
+        placed.push({ x: (r.left - cr.left) * k - 4, y: (r.top - cr.top) * k - 4, w: r.width * k + 8, h: r.height * k + 8 });
+      }
+    }
+    for (const v of [SPIGOT_HANDLE, DRAIN_VALVE]) placed.push({ x: v.x - 22, y: v.y - 20, w: 44, h: 40 });
+    pickScale();
+    drawLegend();
+    const r = blockRect();
+    const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    const { Fg, Fb } = forces();
+    const off = Math.max(16, r.w * 0.3);
+    const showExtra = extraIn.checked;
+
+    const tg = arrow(cx, cy, Fg, 1, '#d23f36');
+    const tb = arrow(cx, cy, Fb, -1, '#1d67c9');
+
+    let tn = null, th = null, N = 0, Fh = 0;
+    if (showExtra) {
+      if (st.dragging) {
+        Fh = Fg - Fb; // what your hand must supply to hold the block still
+        if (Math.abs(Fh) * forceScale >= 1.5) th = arrow(cx - off, cy, Math.abs(Fh), Fh > 0 ? -1 : 1, '#7c46c9');
+      } else if (st.yb <= 1e-4 && Fg > Fb * 1.0001) {
+        N = Fg - Fb;
+        tn = arrow(cx + off, cy, N, -1, '#1f7a4c');
+      }
+    }
+    // center dot
+    if (r.w >= 30) {
+      ctx.beginPath(); ctx.arc(cx, cy, 4.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#1f2a37'; ctx.fill();
+    }
+
+    const gap = off + 22;
+    const leftEdge = cx - off - 22;
+    label(tb, `Buoyancy ${fmtN(Fb)}`, '#1d67c9', 1, -1, gap, leftEdge);
+    label(tg, `Gravity ${fmtN(Fg)}`, '#d23f36', 1, 1, gap, leftEdge);
+    if (tn) label(tn, `Floor pushes up ${fmtN(N)}`, '#1f7a4c', 1, -1, 22, leftEdge);
+    if (th) label(th, `${Fh > 0 ? 'Your pull' : 'Your push'} ${fmtN(Math.abs(Fh))}`, '#7c46c9', -1, Fh > 0 ? -1 : 1, 22);
+  }
+
+  function drawBanner() {
+    if (st.overflowT <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, st.overflowT * 2);
+    const text = 'The tank is full — water is spilling over!';
+    ctx.font = `800 ${15 * UI}px ${FONT}`;
+    const w = ctx.measureText(text).width + 24;
+    const x = xPx(TW / 2) - w / 2, y = yPx(TH) - 40;
+    rr(x, y, w, 28, 14);
+    ctx.fillStyle = '#1f2a37'; ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, x + w / 2, y + 15);
+    ctx.restore();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    drawBackground();
+    drawTankBack();
+    drawTicks();
+    drawSpigot();
+    drawWater();
+    drawBlock();
+    drawBlockTint();
+    drawTankWalls();
+    drawDrain();
+    drawForces();
+    if (blockRect().w < 30) { drawBlock(); drawBlockTint(); } // keep a tiny block visible on top of its arrows
+    drawBanner();
+  }
+
+  // ---------- Readouts ----------
+  const out = {
+    fg: $('fg'), fb: $('fb'), status: $('status'), dens: $('dens'), sub: $('sub'),
+    water: $('water'), level: $('level'), massOut: $('massOut'), volOut: $('volOut')
+  };
+  let lastStatus = '', statusHold = 0;
+  function statusText(Fg, Fb) {
+    const s = side();
+    const frac = st.sub / s;
+    if (st.dragging) return 'You are holding the block';
+    if (st.yb <= 1e-4 && Fg >= Fb * 0.999 && Math.abs(st.v) < 0.05) {
+      return frac > 0 ? 'Resting on the bottom' : 'Sitting on the tank floor';
+    }
+    if (frac === 0 && st.yb > 0) return 'Falling';
+    if (st.v < -0.15) return 'Sinking';
+    if (st.v > 0.15) return 'Rising';
+    if (frac > 0 && frac < 0.999) return 'Floating';
+    if (Math.abs(Fg - Fb) < 0.001 * Fg) return 'Hovering underwater (balanced)';
+    return Fg > Fb ? 'Sinking' : 'Rising';
+  }
+  function updateReadouts(dt) {
+    const { Fg, Fb, Vsub } = forces();
+    out.fg.textContent = fmtN(Fg);
+    out.fb.textContent = fmtN(Fb);
+    out.dens.textContent = `${num(st.m / st.V)} kg/L`;
+    out.sub.textContent = `${fmtVolLong(Vsub)} of ${fmtVol(st.V)}`;
+    out.water.textContent = `${st.Vw.toFixed(1)} L`;
+    out.level.textContent = `${(st.h * 10).toFixed(1)} cm`;
+    const s = statusText(Fg, Fb);
+    statusHold -= dt;
+    if (s !== lastStatus && statusHold <= 0) {
+      lastStatus = s; statusHold = 0.25;
+      out.status.textContent = s;
+    }
+  }
+
+  // ---------- Controls ----------
+  function setMass(v) {
+    st.m = v; out.massOut.textContent = fmtMass(v);
+    massIn.setAttribute('aria-valuetext', fmtMass(v));
+  }
+  function setVol(v) {
+    st.V = v; out.volOut.textContent = fmtVol(v);
+    volIn.setAttribute('aria-valuetext', fmtVol(v));
+    clampBlock();
+  }
+  massIn.addEventListener('input', () => setMass(toVal(+massIn.value, M_MIN, M_MAX)));
+  volIn.addEventListener('input', () => setVol(toVal(+volIn.value, V_MIN, V_MAX)));
+
+  function setSpigot(on) {
+    st.spigot = on;
+    spigotBtn.setAttribute('aria-pressed', String(on));
+    spigotBtn.textContent = on ? 'Turn off spigot' : 'Turn on spigot';
+  }
+  function setDrain(on) {
+    st.drain = on;
+    drainBtn.setAttribute('aria-pressed', String(on));
+    drainBtn.textContent = on ? 'Close drain' : 'Open drain';
+  }
+  tankBtns.push(spigotBtn, drainBtn);
+  spigotBtn.addEventListener('click', () => setSpigot(!st.spigot));
+  drainBtn.addEventListener('click', () => setDrain(!st.drain));
+
+  $('reset').addEventListener('click', () => {
+    massIn.value = toPos(DEFAULTS.m, M_MIN, M_MAX); volIn.value = toPos(DEFAULTS.V, V_MIN, V_MAX);
+    setMass(DEFAULTS.m); setVol(DEFAULTS.V);
+    st.Vw = DEFAULTS.Vw; st.x = DEFAULTS.x; st.yb = DEFAULTS.yb; st.v = 0;
+    st.dragging = false;
+    setSpigot(false); setDrain(false);
+  });
+
+  // ---------- Dragging ----------
+  function toScene(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height };
+  }
+  function overBlock(p) {
+    const r = blockRect();
+    const cssW = canvas.getBoundingClientRect().width || W;
+    const minPx = 44 * W / cssW;                    // at least a fingertip-sized target
+    const pad = Math.max(8, (minPx - r.w) / 2);
+    return p.x >= r.x - pad && p.x <= r.x + r.w + pad && p.y >= r.y - pad && p.y <= r.y + r.h + pad;
+  }
+  canvas.addEventListener('pointerdown', e => {
+    const p = toScene(e);
+    if (!overBlock(p)) {
+      if (Math.hypot(p.x - SPIGOT_HANDLE.x, p.y - SPIGOT_HANDLE.y) < 30) setSpigot(!st.spigot);
+      else if (Math.hypot(p.x - DRAIN_VALVE.x, p.y - DRAIN_VALVE.y) < 26) setDrain(!st.drain);
+      return;
+    }
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+    st.dragging = true;
+    st.offX = st.x - (p.x - TX) / PX;
+    st.offY = st.yb - (FLOOR - p.y) / PX;
+    canvas.style.cursor = 'grabbing';
+  });
+  canvas.addEventListener('pointermove', e => {
+    const p = toScene(e);
+    if (st.dragging) {
+      st.x = (p.x - TX) / PX + st.offX;
+      st.yb = (FLOOR - p.y) / PX + st.offY;
+      clampBlock();
+    } else {
+      const onValve = Math.hypot(p.x - SPIGOT_HANDLE.x, p.y - SPIGOT_HANDLE.y) < 30 || Math.hypot(p.x - DRAIN_VALVE.x, p.y - DRAIN_VALVE.y) < 26;
+      canvas.style.cursor = overBlock(p) ? 'grab' : onValve ? 'pointer' : 'default';
+    }
+  });
+  function endDrag(e) {
+    if (!st.dragging) return;
+    st.dragging = false;
+    st.v = 0;
+    try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+    canvas.style.cursor = 'grab';
+  }
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+
+  // Keyboard: arrow keys hold and move the block; release with Escape/Enter or Tab away
+  canvas.addEventListener('keydown', e => {
+    const step = e.shiftKey ? 0.3 : 0.1;
+    const moves = { ArrowUp: [0, step], ArrowDown: [0, -step], ArrowLeft: [-step, 0], ArrowRight: [step, 0] };
+    if (moves[e.key]) {
+      e.preventDefault();
+      st.dragging = true;
+      st.x += moves[e.key][0]; st.yb += moves[e.key][1];
+      clampBlock();
+    } else if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      st.dragging = false; st.v = 0;
+    }
+  });
+  canvas.addEventListener('blur', () => { if (st.dragging) { st.dragging = false; st.v = 0; } });
+
+  // ---------- Sizing ----------
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    const cssW = canvas.clientWidth || W;
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssW * dpr * H / W);
+    ctx.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
+    UI = Math.min(1.7, Math.max(1, 0.85 / (cssW / W)));
+  }
+  if ('ResizeObserver' in window) new ResizeObserver(resize).observe(canvas);
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---------- Loop ----------
+  massIn.value = toPos(DEFAULTS.m, M_MIN, M_MAX); volIn.value = toPos(DEFAULTS.V, V_MIN, V_MAX);
+  setMass(st.m); setVol(st.V);
+  // place the on-tank buttons next to the faucet and the drain valve
+  spigotBtn.style.left = `${(xPx(0.85) + 20) / W * 100}%`;
+  spigotBtn.style.top = `${(PIPE_Y + 10) / H * 100}%`;
+  drainBtn.style.top = `${(DRAIN_VALVE.y - 43) / H * 100}%`;
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.033, Math.max(0, (now - last) / 1000));
+    last = now;
+    update(dt);
+    draw();
+    updateReadouts(dt);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
