@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shape Explorer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Lexend:wght@400;500;600&display=swap">
+<style>
+/* Layout: a drafting table. Big 3D stage on graph paper at left, a worksheet-style control sheet at right; stacks on phones. */
+:root {
+  --paper: #E8EEF3;
+  --paper-line: #D7E1E9;
+  --sheet: #FFFFFF;
+  --ink: #1B2A3A;
+  --ink-soft: #586A7C;
+  --rule: #CAD6E0;
+  --accent: #2B5DA8;
+  --accent-soft: #E3ECF8;
+  --accent-ink: #FFFFFF;
+  --face-n: #B7C7D7;
+  --face-n2: #DDE6EE;
+  --face-a: #E9B443;
+  --face-b: #45A0A3;
+  --face-c: #DB6E58;
+  --edge: #1B2A3A;
+  --mark: #2B5DA8;
+  --grid: #C9D5DF;
+  --grid-c: #9DB0C2;
+  --label-bg: rgba(255,255,255,0.88);
+  --font-display: "Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+  --font-body: "Lexend", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #111920; --paper-line: #18232D; --sheet: #19232E; --ink: #E2E9F0; --ink-soft: #98A8B8;
+    --rule: #2D3B4A; --accent: #7EA6E6; --accent-soft: #22324A; --accent-ink: #0E1620;
+    --face-n: #607386; --face-n2: #3B4A5A; --face-a: #E8B74E; --face-b: #4FB3B5; --face-c: #E27D67;
+    --edge: #E2E9F0; --mark: #9CC0F5; --grid: #273543; --grid-c: #3C4F62; --label-bg: rgba(25,35,46,0.9);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #111920; --paper-line: #18232D; --sheet: #19232E; --ink: #E2E9F0; --ink-soft: #98A8B8;
+  --rule: #2D3B4A; --accent: #7EA6E6; --accent-soft: #22324A; --accent-ink: #0E1620;
+  --face-n: #607386; --face-n2: #3B4A5A; --face-a: #E8B74E; --face-b: #4FB3B5; --face-c: #E27D67;
+  --edge: #E2E9F0; --mark: #9CC0F5; --grid: #273543; --grid-c: #3C4F62; --label-bg: rgba(25,35,46,0.9);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--paper-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--paper-line) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-block: 20px 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid;
+  gap: 16px;
+}
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
+h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(1.7rem, 3.4vw, 2.3rem);
+  letter-spacing: -0.01em;
+  margin: 0;
+  text-wrap: balance;
+}
+header p { margin: 0; color: var(--ink-soft); }
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 860px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+/* Stage */
+.stage {
+  position: relative;
+  height: min(72vh, 620px);
+  min-height: 340px;
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  overflow: hidden;
+  touch-action: none;
+}
+@media (max-width: 860px) { .stage { height: 380px; } }
+.stage canvas { display: block; width: 100%; height: 100%; cursor: grab; outline: none; }
+.stage.dragging canvas { cursor: grabbing; }
+.stage canvas:focus-visible { box-shadow: inset 0 0 0 3px var(--accent); }
+.labels { position: absolute; inset: 0; pointer-events: none; }
+.dim {
+  position: absolute; left: 0; top: 0;
+  font-size: 13px; font-weight: 600; white-space: nowrap;
+  padding: 1px 7px; border-radius: 6px;
+  background: var(--label-bg); color: var(--ink);
+  border: 1px solid var(--rule);
+  font-variant-numeric: tabular-nums;
+}
+.dim.slant { border-style: dashed; border-color: var(--mark); }
+.dim i { font-style: italic; font-weight: 600; }
+.view-btns { position: absolute; top: 10px; right: 10px; display: flex; gap: 6px; }
+.view-btns button {
+  font: 600 15px/1 var(--font-body);
+  min-width: 34px; height: 34px; padding: 0 10px;
+  border-radius: 8px; border: 1px solid var(--rule);
+  background: var(--sheet); color: var(--ink); cursor: pointer;
+}
+.view-btns button:hover { border-color: var(--accent); color: var(--accent); }
+.hint {
+  position: absolute; left: 12px; bottom: 10px; margin: 0;
+  font-size: 12.5px; color: var(--ink-soft);
+  background: var(--label-bg); padding: 3px 9px; border-radius: 6px;
+  pointer-events: none;
+}
+
+/* Panel */
+.panel {
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  padding: 16px;
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.section-label {
+  font-size: 11.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px;
+}
+.tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px; }
+.tab {
+  display: grid; justify-items: center; gap: 2px;
+  padding: 8px 2px 6px;
+  border: 1px solid var(--rule); border-radius: 10px;
+  background: transparent; color: var(--ink);
+  font: 500 11px/1.2 var(--font-body); text-align: center; cursor: pointer;
+}
+.tab svg { width: 34px; height: 34px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; stroke-linecap: round; }
+.tab svg .dash { stroke-dasharray: 2 2.5; opacity: 0.6; }
+.tab:hover { border-color: var(--accent); }
+.tab[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.tab:focus-visible, .measure:focus-visible, .view-btns button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.shape-name { font-family: var(--font-display); font-weight: 600; font-size: 1.35rem; margin: 0 0 10px; }
+.sliders { display: grid; gap: 12px; }
+.slider-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 12px; }
+.slider-row label { font-weight: 500; }
+.slider-row label i { font-style: italic; color: var(--accent); font-weight: 600; }
+.slider-row output {
+  font-weight: 600; font-variant-numeric: tabular-nums; min-width: 4.5em; text-align: right;
+}
+.slider-row input { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); height: 24px; }
+
+.measures { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.measure {
+  text-align: left; cursor: pointer;
+  padding: 10px 12px; border-radius: 10px;
+  border: 1.5px solid var(--rule); background: transparent; color: var(--ink);
+  font: inherit; display: grid; gap: 2px;
+}
+.measure strong { font-family: var(--font-display); font-weight: 600; font-size: 1.1rem; }
+.measure span { font-size: 12.5px; color: var(--ink-soft); }
+.measure:hover { border-color: var(--accent); }
+.measure[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.measure[aria-pressed="true"] span { color: var(--accent-ink); opacity: 0.85; }
+
+.eq { display: grid; gap: 8px; border-top: 1px solid var(--rule); padding-top: 14px; }
+.eq-what { margin: 0; color: var(--ink-soft); font-size: 13.5px; }
+.eq-line { font-size: 1.05rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.eq-line.rule { font-weight: 600; color: var(--accent); }
+.eq-line.result { font-family: var(--font-display); font-weight: 700; font-size: 1.45rem; }
+.eq-note { margin: 0; font-size: 13.5px; color: var(--ink-soft); }
+.var { font-style: italic; }
+.faces { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.faces li {
+  display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: 2px 10px; align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+.sw { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--edge); }
+.sw.a { background: var(--face-a); } .sw.b { background: var(--face-b); } .sw.c { background: var(--face-c); }
+.fname { font-weight: 500; }
+.fval { font-weight: 600; text-align: right; }
+.fcalc { grid-column: 2 / -1; font-size: 13.5px; color: var(--ink-soft); }
+.empty { margin: 0; color: var(--ink-soft); font-size: 13.5px; border-top: 1px solid var(--rule); padding-top: 14px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <h1>Shape Explorer</h1>
+    <p>Drag the shape to turn it. Slide to change its size.</p>
+  </header>
+
+  <div class="layout">
+    <section class="stage" id="stage" aria-label="3D view of the shape">
+      <canvas id="c" tabindex="0" aria-label="Drag or use arrow keys to turn the shape"></canvas>
+      <div class="labels" id="labels"></div>
+      <div class="view-btns">
+        <button type="button" id="zoomOut" aria-label="Zoom out">−</button>
+        <button type="button" id="zoomIn" aria-label="Zoom in">+</button>
+        <button type="button" id="resetView">Reset view</button>
+      </div>
+      <p class="hint">Drag to turn · scroll or pinch to zoom · each grid square is 1 cm</p>
+    </section>
+
+    <aside class="panel">
+      <div>
+        <p class="section-label">Shape</p>
+        <div class="tabs" role="tablist" aria-label="Choose a shape">
+          <button class="tab" role="tab" id="tab-cube" data-shape="cube" aria-selected="true">
+            <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 11h15v15H5z M5 11l6-5h15l-6 5 M26 6v15l-6 5"/></svg>Cube</button>
+          <button class="tab" role="tab" id="tab-rect" data-shape="rect" aria-selected="false">
+            <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 15h19v10H3z M3 15l6-5h19l-6 5 M28 10v10l-6 5"/></svg>Rect. prism</button>
+          <button class="tab" role="tab" id="tab-tri" data-shape="tri" aria-selected="false">
+            <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 25H20L11.5 11Z M11.5 11L19.5 6L28 20L20 25"/></svg>Tri. prism</button>
+          <button class="tab" role="tab" id="tab-pyr" data-shape="pyr" aria-selected="false">
+            <svg viewBox="0 0 32 32" aria-hidden="true"><path class="dash" d="M4 25L12 19H28"/><path d="M4 25H20L28 19 M15 4L4 25 M15 4L20 25 M15 4L28 19"/></svg>Rect. pyramid</button>
+          <button class="tab" role="tab" id="tab-cyl" data-shape="cyl" aria-selected="false">
+            <svg viewBox="0 0 32 32" aria-hidden="true"><path class="dash" d="M7 25a9 3.5 0 0 1 18 0"/><ellipse cx="16" cy="7.5" rx="9" ry="3.5"/><path d="M7 7.5V25a9 3.5 0 0 0 18 0V7.5"/></svg>Cylinder</button>
+        </div>
+      </div>
+
+      <div>
+        <h2 class="shape-name" id="shapeName">Cube</h2>
+        <div class="sliders" id="sliders"></div>
+      </div>
+
+      <div>
+        <p class="section-label">Tap to see the equation</p>
+        <div class="measures">
+          <button type="button" class="measure" id="btnVol" data-mode="vol" aria-pressed="false">
+            <strong>Volume</strong><span>Space inside</span>
+          </button>
+          <button type="button" class="measure" id="btnSA" data-mode="sa" aria-pressed="false">
+            <strong>Surface area</strong><span>Area of all the faces</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="eqBox"><p class="empty">Pick Volume or Surface area to see how it's worked out for this shape.</p></div>
+    </aside>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+  const SHAPES = {
+    cube: { name: 'Cube', dims: [{ k: 's', label: 'side' }] },
+    rect: { name: 'Rectangular prism', dims: [{ k: 'l', label: 'length' }, { k: 'w', label: 'width' }, { k: 'h', label: 'height' }] },
+    tri:  { name: 'Triangular prism', dims: [{ k: 'b', label: 'triangle base' }, { k: 'h', label: 'triangle height' }, { k: 'l', label: 'length of prism' }] },
+    pyr:  { name: 'Rectangular pyramid', dims: [{ k: 'l', label: 'length' }, { k: 'w', label: 'width' }, { k: 'h', label: 'height' }] },
+    cyl:  { name: 'Cylinder', dims: [{ k: 'r', label: 'radius', max: 8 }, { k: 'h', label: 'height' }] }
+  };
+  const state = {
+    shape: 'cube',
+    mode: null,
+    vals: { cube: { s: 4 }, rect: { l: 6, w: 4, h: 3 }, tri: { b: 6, h: 4, l: 8 }, pyr: { l: 8, w: 6, h: 4 }, cyl: { r: 3, h: 5 } }
+  };
+  const UNIT = 'cm';
+  const MIN = 1, MAX = 10;
+
+  // ---------- helpers ----------
+  const $ = (id) => document.getElementById(id);
+  const tok = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const fmt = (x) => String(Math.round(x * 100) / 100);
+  const v = (name) => `<span class="var">${name}</span>`;
+  function slant(a, h) {
+    const exact = Math.sqrt(a * a + h * h);
+    const r = Math.round(exact * 10) / 10;
+    return { val: r, exact: Math.abs(exact - Math.round(exact)) < 1e-9 };
+  }
+
+  // ---------- three.js setup ----------
+  const stage = $('stage'), canvas = $('c'), labelsEl = $('labels');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setClearColor(0x000000, 0);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 300);
+  scene.add(camera);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.62));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.55);
+  sun.position.set(4, 7, 3);
+  camera.add(sun);
+
+  const DEFAULT_VIEW = { az: 0.7, el: 0.42, dist: 21, ty: 2.5 };
+  const view = Object.assign({}, DEFAULT_VIEW);
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  function placeCamera() {
+    const { az, el, dist, ty } = view;
+    camera.position.set(dist * Math.cos(el) * Math.sin(az), ty + dist * Math.sin(el), dist * Math.cos(el) * Math.cos(az));
+    camera.lookAt(0, ty, 0);
+  }
+
+  let world = new THREE.Group();
+  scene.add(world);
+  let labels = [];
+
+  // ---------- shape faces ----------
+  function boxFaces(l, w, h, g) {
+    const x = l / 2, z = w / 2;
+    return [
+      { pts: [[-x, 0, -z], [x, 0, -z], [x, 0, z], [-x, 0, z]], g: g.tb, base: true },
+      { pts: [[-x, h, -z], [x, h, -z], [x, h, z], [-x, h, z]], g: g.tb },
+      { pts: [[-x, 0, z], [x, 0, z], [x, h, z], [-x, h, z]], g: g.fb },
+      { pts: [[-x, 0, -z], [x, 0, -z], [x, h, -z], [-x, h, -z]], g: g.fb },
+      { pts: [[x, 0, -z], [x, 0, z], [x, h, z], [x, h, -z]], g: g.lr },
+      { pts: [[-x, 0, -z], [-x, 0, z], [-x, h, z], [-x, h, -z]], g: g.lr }
+    ];
+  }
+
+  function shapeData() {
+    const s = state.shape, d = state.vals[s];
+    const faces = [], marks = [];
+    // marks: {at:[x,y,z], off:[dx,dy,dz], html, slant?, line?:[a,b], modes?:['sa']}
+    if (s === 'cube' || s === 'rect') {
+      const l = s === 'cube' ? d.s : d.l, w = s === 'cube' ? d.s : d.w, h = s === 'cube' ? d.s : d.h;
+      const g = s === 'cube' ? { tb: 'a', fb: 'a', lr: 'a' } : { tb: 'a', fb: 'b', lr: 'c' };
+      faces.push(...boxFaces(l, w, h, g));
+      const x = l / 2, z = w / 2;
+      const n = s === 'cube' ? ['s', 's', 's'] : ['l', 'w', 'h'];
+      marks.push({ at: [0, 0, z], off: [0, -0.6, 0.6], html: `${v(n[0])} = ${l} ${UNIT}` });
+      marks.push({ at: [x, 0, 0], off: [0.7, -0.6, 0], html: `${v(n[1])} = ${w} ${UNIT}` });
+      marks.push({ at: [x, h / 2, z], off: [0.6, 0, 0.6], html: `${v(n[2])} = ${h} ${UNIT}` });
+    } else if (s === 'tri') {
+      const L = d.l / 2, B = d.b / 2, h = d.h;
+      faces.push({ pts: [[L, 0, -B], [L, 0, B], [L, h, 0]], g: 'a', base: true });
+      faces.push({ pts: [[-L, 0, -B], [-L, 0, B], [-L, h, 0]], g: 'a' });
+      faces.push({ pts: [[-L, 0, -B], [L, 0, -B], [L, 0, B], [-L, 0, B]], g: 'b' });
+      faces.push({ pts: [[-L, 0, B], [L, 0, B], [L, h, 0], [-L, h, 0]], g: 'c' });
+      faces.push({ pts: [[-L, 0, -B], [L, 0, -B], [L, h, 0], [-L, h, 0]], g: 'c' });
+      const sl = slant(B, h);
+      marks.push({ at: [L, 0, 0], off: [0.7, -0.6, 0], html: `${v('b')} = ${d.b} ${UNIT}` });
+      marks.push({ at: [L, h / 2, 0], off: [0.9, 0, 0], html: `${v('h')} = ${h} ${UNIT}`, line: [[L, 0, 0], [L, h, 0]] });
+      marks.push({ at: [0, 0, B], off: [0, -0.6, 0.7], html: `${v('l')} = ${d.l} ${UNIT}` });
+      marks.push({ at: [L, h / 2, B / 2], off: [0.5, 0.4, 0.6], html: `${v('s')} ${sl.exact ? '=' : '≈'} ${fmt(sl.val)} ${UNIT}`, slant: true, modes: ['sa'] });
+    } else if (s === 'pyr') {
+      const X = d.l / 2, Z = d.w / 2, h = d.h, A = [0, h, 0];
+      faces.push({ pts: [[-X, 0, -Z], [X, 0, -Z], [X, 0, Z], [-X, 0, Z]], g: 'a', base: true });
+      faces.push({ pts: [[-X, 0, Z], [X, 0, Z], A], g: 'b' });
+      faces.push({ pts: [[-X, 0, -Z], [X, 0, -Z], A], g: 'b' });
+      faces.push({ pts: [[X, 0, -Z], [X, 0, Z], A], g: 'c' });
+      faces.push({ pts: [[-X, 0, -Z], [-X, 0, Z], A], g: 'c' });
+      const s1 = slant(Z, h), s2 = slant(X, h);
+      marks.push({ at: [0, 0, Z], off: [0, -0.6, 0.7], html: `${v('l')} = ${d.l} ${UNIT}` });
+      marks.push({ at: [X, 0, 0], off: [0.8, -0.6, 0], html: `${v('w')} = ${d.w} ${UNIT}` });
+      marks.push({ at: [0, h / 2, 0], off: [-0.9, 0, -0.9], html: `${v('h')} = ${h} ${UNIT}`, line: [[0, 0, 0], A] });
+      marks.push({ at: [0, h / 2, Z / 2], off: [0, 0.3, 0.6], html: `${v('s₁')} ${s1.exact ? '=' : '≈'} ${fmt(s1.val)} ${UNIT}`, slant: true, line: [[0, 0, Z], A], modes: ['sa'] });
+      marks.push({ at: [X / 2, h / 2, 0], off: [0.6, 0.3, 0], html: `${v('s₂')} ${s2.exact ? '=' : '≈'} ${fmt(s2.val)} ${UNIT}`, slant: true, line: [[X, 0, 0], A], modes: ['sa'] });
+    } else if (s === 'cyl') {
+      const R = d.r, h = d.h, N = 72;
+      const ring = (y) => Array.from({ length: N }, (_, i) => { const t = (i / N) * Math.PI * 2; return [R * Math.cos(t), y, R * Math.sin(t)]; });
+      faces.push({ pts: ring(0), g: 'a', base: true });
+      faces.push({ pts: ring(h), g: 'a' });
+      for (let i = 0; i < N; i++) {
+        const t0 = (i / N) * Math.PI * 2, t1 = ((i + 1) / N) * Math.PI * 2;
+        const c0 = Math.cos(t0), s0 = Math.sin(t0), c1 = Math.cos(t1), s1 = Math.sin(t1);
+        faces.push({
+          pts: [[R * c0, 0, R * s0], [R * c1, 0, R * s1], [R * c1, h, R * s1], [R * c0, h, R * s0]],
+          nrm: [[c0, 0, s0], [c1, 0, s1], [c1, 0, s1], [c0, 0, s0]],
+          g: 'b', noEdges: true
+        });
+      }
+      const rx = Math.cos(DEFAULT_VIEW.az), rz = -Math.sin(DEFAULT_VIEW.az);
+      marks.push({ at: [R / 2, h, 0], off: [0, 0.45, 0], html: `${v('r')} = ${R} ${UNIT}`, line: [[0, h, 0], [R, h, 0]] });
+      marks.push({ at: [R * rx, h / 2, R * rz], off: [0.9 * rx, 0, 0.9 * rz], html: `${v('h')} = ${h} ${UNIT}` });
+    }
+    return { faces, marks };
+  }
+
+  function faceColor(f, colors) {
+    if (state.mode === 'sa') return colors[f.g];
+    if (state.mode === 'vol') return f.base ? colors.a : colors.n;
+    return colors.n;
+  }
+
+  function disposeGroup(g) {
+    g.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) o.material.dispose();
+    });
+    scene.remove(g);
+  }
+
+  function rebuild() {
+    disposeGroup(world);
+    world = new THREE.Group();
+    scene.add(world);
+    labelsEl.innerHTML = '';
+    labels = [];
+
+    const colors = {
+      n: new THREE.Color(tok('--face-n')), n2: new THREE.Color(tok('--face-n2')),
+      a: new THREE.Color(tok('--face-a')), b: new THREE.Color(tok('--face-b')), c: new THREE.Color(tok('--face-c'))
+    };
+    const edgeColor = new THREE.Color(tok('--edge'));
+    const markColor = new THREE.Color(tok('--mark'));
+
+    // ground grid, 1 cm squares
+    const grid = new THREE.GridHelper(20, 20, new THREE.Color(tok('--grid-c')), new THREE.Color(tok('--grid')));
+    grid.position.y = -0.002;
+    world.add(grid);
+
+    const { faces, marks } = shapeData();
+    const center = new THREE.Vector3();
+    let count = 0;
+    faces.forEach((f) => f.pts.forEach((p) => { center.add(new THREE.Vector3(...p)); count++; }));
+    center.divideScalar(count);
+
+    const solid = { pos: [], nor: [], col: [] }, ghost = { pos: [], nor: [], col: [] }, edges = [];
+    faces.forEach((f) => {
+      let p = f.pts.map((a) => new THREE.Vector3(...a));
+      const n = new THREE.Vector3().subVectors(p[1], p[0]).cross(new THREE.Vector3().subVectors(p[2], p[0])).normalize();
+      const fc = p.reduce((acc, q) => acc.add(q), new THREE.Vector3()).divideScalar(p.length);
+      let vn = f.nrm ? f.nrm.map((a) => new THREE.Vector3(...a)) : p.map(() => n);
+      if (n.dot(fc.clone().sub(center)) < 0) { p = p.slice().reverse(); vn = vn.slice().reverse(); if (!f.nrm) n.negate(); }
+      const c = faceColor(f, colors);
+      const bk = (state.mode === 'vol' && !f.base) ? ghost : solid;
+      for (let i = 1; i < p.length - 1; i++) {
+        [0, i, i + 1].forEach((j) => { const q = p[j], m = vn[j]; bk.pos.push(q.x, q.y, q.z); bk.nor.push(m.x, m.y, m.z); bk.col.push(c.r, c.g, c.b); });
+      }
+      if (!f.noEdges) for (let i = 0; i < p.length; i++) {
+        const a = p[i], b = p[(i + 1) % p.length];
+        edges.push(a.x, a.y, a.z, b.x, b.y, b.z);
+      }
+    });
+    [[solid, false], [ghost, true]].forEach(([bk, see]) => {
+      if (!bk.pos.length) return;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(bk.pos, 3));
+      geo.setAttribute('normal', new THREE.Float32BufferAttribute(bk.nor, 3));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(bk.col, 3));
+      const mat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1, transparent: see, opacity: see ? 0.4 : 1, depthWrite: !see });
+      const mesh = new THREE.Mesh(geo, mat);
+      if (see) mesh.renderOrder = 5;
+      world.add(mesh);
+    });
+
+    const eg = new THREE.BufferGeometry();
+    eg.setAttribute('position', new THREE.Float32BufferAttribute(edges, 3));
+    world.add(new THREE.LineSegments(eg, new THREE.LineBasicMaterial({ color: edgeColor })));
+
+    marks.forEach((m) => {
+      if (m.modes && !m.modes.includes(state.mode)) return;
+      if (m.line) {
+        const lg = new THREE.BufferGeometry().setFromPoints(m.line.map((a) => new THREE.Vector3(...a)));
+        const line = new THREE.Line(lg, new THREE.LineDashedMaterial({ color: markColor, dashSize: 0.28, gapSize: 0.18, depthTest: false }));
+        line.computeLineDistances();
+        line.renderOrder = 10;
+        world.add(line);
+      }
+      const el = document.createElement('div');
+      el.className = 'dim' + (m.slant ? ' slant' : '');
+      el.innerHTML = m.html;
+      labelsEl.appendChild(el);
+      labels.push({ el, pos: new THREE.Vector3(m.at[0] + m.off[0], m.at[1] + m.off[1], m.at[2] + m.off[2]) });
+    });
+    render();
+  }
+
+  function render() {
+    placeCamera();
+    renderer.render(scene, camera);
+    const w = stage.clientWidth, h = stage.clientHeight;
+    labels.forEach(({ el, pos }) => {
+      const p = pos.clone().project(camera);
+      el.hidden = p.z > 1;
+      el.style.transform = `translate(${((p.x + 1) / 2) * w}px, ${((1 - p.y) / 2) * h}px) translate(-50%, -50%)`;
+    });
+  }
+
+  function resize() {
+    const w = stage.clientWidth, h = stage.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    render();
+  }
+  new ResizeObserver(resize).observe(stage);
+
+  // ---------- dragging / zoom ----------
+  const pointers = new Map();
+  let pinch = null;
+  const pinchDist = () => { const [a, b] = [...pointers.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; };
+  canvas.addEventListener('pointerdown', (e) => {
+    canvas.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    stage.classList.add('dragging');
+    if (pointers.size === 2) pinch = { d: pinchDist(), dist: view.dist };
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    const p = pointers.get(e.pointerId);
+    if (!p) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    p.x = e.clientX; p.y = e.clientY;
+    if (pointers.size === 1) {
+      view.az -= dx * 0.009;
+      view.el = clamp(view.el + dy * 0.009, -1.2, 1.5);
+    } else if (pointers.size === 2 && pinch) {
+      view.dist = clamp(pinch.dist * pinch.d / pinchDist(), 10, 48);
+    }
+    render();
+  });
+  const endPointer = (e) => {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinch = null;
+    if (pointers.size === 0) stage.classList.remove('dragging');
+  };
+  canvas.addEventListener('pointerup', endPointer);
+  canvas.addEventListener('pointercancel', endPointer);
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    view.dist = clamp(view.dist * (1 + e.deltaY * 0.001), 10, 48);
+    render();
+  }, { passive: false });
+  canvas.addEventListener('keydown', (e) => {
+    const step = 0.12;
+    if (e.key === 'ArrowLeft') view.az += step;
+    else if (e.key === 'ArrowRight') view.az -= step;
+    else if (e.key === 'ArrowUp') view.el = clamp(view.el + step, -1.2, 1.5);
+    else if (e.key === 'ArrowDown') view.el = clamp(view.el - step, -1.2, 1.5);
+    else return;
+    e.preventDefault();
+    render();
+  });
+  $('zoomIn').addEventListener('click', () => { view.dist = clamp(view.dist / 1.15, 10, 48); render(); });
+  $('zoomOut').addEventListener('click', () => { view.dist = clamp(view.dist * 1.15, 10, 48); render(); });
+  $('resetView').addEventListener('click', () => { Object.assign(view, DEFAULT_VIEW); render(); });
+
+  // ---------- panel ----------
+  function buildSliders() {
+    const s = state.shape;
+    $('shapeName').textContent = SHAPES[s].name;
+    const box = $('sliders');
+    box.innerHTML = '';
+    SHAPES[s].dims.forEach((dim) => {
+      const id = `dim-${s}-${dim.k}`;
+      const row = document.createElement('div');
+      row.className = 'slider-row';
+      row.innerHTML =
+        `<label for="${id}">${dim.label} (<i>${dim.k}</i>)</label>` +
+        `<output id="${id}-out" for="${id}">${state.vals[s][dim.k]} ${UNIT}</output>` +
+        `<input type="range" id="${id}" min="${MIN}" max="${dim.max || MAX}" step="1" value="${state.vals[s][dim.k]}">`;
+      box.appendChild(row);
+      const input = row.querySelector('input');
+      input.addEventListener('input', () => {
+        state.vals[s][dim.k] = Number(input.value);
+        row.querySelector('output').textContent = `${input.value} ${UNIT}`;
+        rebuild();
+        renderEq();
+      });
+    });
+  }
+
+  function faceRows(rows) {
+    return '<ul class="faces">' + rows.map((r) =>
+      `<li><span class="sw ${r.sw}"></span><span class="fname">${r.name}</span><span class="fval">${r.val} ${UNIT}²</span><span class="fcalc">${r.calc}</span></li>`
+    ).join('') + '</ul>';
+  }
+
+  function renderEq() {
+    const box = $('eqBox');
+    if (!state.mode) {
+      box.innerHTML = '<p class="empty">Pick Volume or Surface area to see how it’s worked out for this shape.</p>';
+      return;
+    }
+    const s = state.shape, d = state.vals[s];
+    let html = '';
+    if (state.mode === 'vol') {
+      html += '<p class="eq-what">Volume is the space inside the shape, measured in cubic centimeters (cm³): how many 1 cm cubes would fit.</p>';
+      if (s === 'cube') {
+        html += `<div class="eq-line rule">V = ${v('s')} × ${v('s')} × ${v('s')}</div>`;
+        html += `<div class="eq-line">V = ${d.s} × ${d.s} × ${d.s}</div>`;
+        html += `<div class="eq-line result">V = ${d.s ** 3} ${UNIT}³</div>`;
+        html += `<p class="eq-note">The yellow bottom holds ${d.s} × ${d.s} = ${d.s * d.s} cubes in one layer, and there ${d.s === 1 ? 'is 1 layer' : `are ${d.s} layers`}.</p>`;
+      } else if (s === 'rect') {
+        html += `<div class="eq-line rule">V = ${v('l')} × ${v('w')} × ${v('h')}</div>`;
+        html += `<div class="eq-line">V = ${d.l} × ${d.w} × ${d.h}</div>`;
+        html += `<div class="eq-line result">V = ${d.l * d.w * d.h} ${UNIT}³</div>`;
+        html += `<p class="eq-note">The yellow bottom holds ${d.l} × ${d.w} = ${d.l * d.w} cubes in one layer, and there ${d.h === 1 ? 'is 1 layer' : `are ${d.h} layers`}.</p>`;
+      } else if (s === 'tri') {
+        const tA = 0.5 * d.b * d.h;
+        html += `<div class="eq-line rule">V = (½ × ${v('b')} × ${v('h')}) × ${v('l')}</div>`;
+        html += `<div class="eq-line">V = (½ × ${d.b} × ${d.h}) × ${d.l} = ${fmt(tA)} × ${d.l}</div>`;
+        html += `<div class="eq-line result">V = ${fmt(tA * d.l)} ${UNIT}³</div>`;
+        html += `<p class="eq-note">The base of this prism is the yellow triangle. Its area is ½ × ${d.b} × ${d.h} = ${fmt(tA)} ${UNIT}². Stretch that triangle along the length of ${d.l} ${UNIT} and you get the volume.</p>`;
+      } else if (s === 'pyr') {
+        const box3 = d.l * d.w * d.h, V = box3 / 3, exact = box3 % 3 === 0;
+        html += `<div class="eq-line rule">V = ⅓ × ${v('l')} × ${v('w')} × ${v('h')}</div>`;
+        html += `<div class="eq-line">V = ⅓ × ${d.l} × ${d.w} × ${d.h} = ${box3} ÷ 3</div>`;
+        html += `<div class="eq-line result">V ${exact ? '=' : '≈'} ${exact ? V : (Math.round(V * 10) / 10)} ${UNIT}³</div>`;
+        html += `<p class="eq-note">A box with the same yellow base and the same height would hold ${d.l} × ${d.w} × ${d.h} = ${box3} ${UNIT}³. A pyramid holds exactly one third of that.${exact ? '' : ' (Rounded to one decimal place.)'}</p>`;
+      } else if (s === 'cyl') {
+        const base = 3.14 * d.r * d.r, V = base * d.h;
+        html += `<div class="eq-line rule">V = π × ${v('r')} × ${v('r')} × ${v('h')}</div>`;
+        html += `<div class="eq-line">V ≈ 3.14 × ${d.r} × ${d.r} × ${d.h}</div>`;
+        html += `<div class="eq-line result">V ≈ ${fmt(V)} ${UNIT}³</div>`;
+        html += `<p class="eq-note">The yellow circle on the bottom has area π × ${d.r} × ${d.r} ≈ ${fmt(base)} ${UNIT}². Stack that circle up ${d.h} ${UNIT} high and you fill the cylinder. Using 3.14 for π makes the answer very close but not exact. The exact answer is ${d.r * d.r * d.h}π ${UNIT}³.</p>`;
+      }
+    } else {
+      html += '<p class="eq-what">Surface area is the total area of every face, measured in square centimeters (cm²): how much paper it would take to wrap the shape with no overlap.</p>';
+      if (s === 'cube') {
+        const f = d.s * d.s;
+        html += `<div class="eq-line rule">SA = 6 × (${v('s')} × ${v('s')})</div>`;
+        html += faceRows([{ sw: 'a', name: 'All 6 faces', calc: `6 × (${d.s} × ${d.s}) = 6 × ${f}`, val: 6 * f }]);
+        html += `<div class="eq-line result">SA = ${6 * f} ${UNIT}²</div>`;
+        html += '<p class="eq-note">A cube has 6 faces, and every one is the same square.</p>';
+      } else if (s === 'rect') {
+        const a = 2 * d.l * d.w, b = 2 * d.l * d.h, c = 2 * d.w * d.h;
+        html += `<div class="eq-line rule">SA = 2(${v('l')} × ${v('w')}) + 2(${v('l')} × ${v('h')}) + 2(${v('w')} × ${v('h')})</div>`;
+        html += faceRows([
+          { sw: 'a', name: 'Top &amp; bottom', calc: `2 × (${d.l} × ${d.w})`, val: a },
+          { sw: 'b', name: 'Front &amp; back', calc: `2 × (${d.l} × ${d.h})`, val: b },
+          { sw: 'c', name: 'Left &amp; right', calc: `2 × (${d.w} × ${d.h})`, val: c }
+        ]);
+        html += `<div class="eq-line result">SA = ${a} + ${b} + ${c} = ${a + b + c} ${UNIT}²</div>`;
+        html += '<p class="eq-note">The faces come in matching pairs. The colors on the shape match the rows above.</p>';
+      } else if (s === 'tri') {
+        const sl = slant(d.b / 2, d.h);
+        const a = 2 * 0.5 * d.b * d.h, b = d.b * d.l, c = 2 * sl.val * d.l, tot = a + b + c;
+        const eqs = sl.exact ? '=' : '≈';
+        html += `<div class="eq-line rule">SA = 2 × (½ × ${v('b')} × ${v('h')}) + (${v('b')} × ${v('l')}) + 2 × (${v('s')} × ${v('l')})</div>`;
+        html += faceRows([
+          { sw: 'a', name: 'Two triangle ends', calc: `2 × (½ × ${d.b} × ${d.h})`, val: fmt(a) },
+          { sw: 'b', name: 'Bottom', calc: `${d.b} × ${d.l}`, val: fmt(b) },
+          { sw: 'c', name: 'Two slanted sides', calc: `2 × (${fmt(sl.val)} × ${d.l})`, val: fmt(c) }
+        ]);
+        html += `<div class="eq-line result">SA ${eqs} ${fmt(a)} + ${fmt(b)} + ${fmt(c)} = ${fmt(tot)} ${UNIT}²</div>`;
+        html += `<p class="eq-note">${v('s')} is the slanted edge of the triangle (the dashed label). It comes from the Pythagorean theorem: ${v('s')} = √((${v('b')} ÷ 2)² + ${v('h')}²) = √(${fmt(d.b / 2)}² + ${d.h}²) ${eqs} ${fmt(sl.val)} ${UNIT}.${sl.exact ? '' : ' It’s rounded to one decimal place, so the total is close but not exact.'}</p>`;
+      } else if (s === 'pyr') {
+        const s1 = slant(d.w / 2, d.h), s2 = slant(d.l / 2, d.h);
+        const a = d.l * d.w, b = 2 * 0.5 * d.l * s1.val, c = 2 * 0.5 * d.w * s2.val, tot = a + b + c;
+        const exact = s1.exact && s2.exact;
+        html += `<div class="eq-line rule">SA = (${v('l')} × ${v('w')}) + 2 × (½ × ${v('l')} × ${v('s₁')}) + 2 × (½ × ${v('w')} × ${v('s₂')})</div>`;
+        html += faceRows([
+          { sw: 'a', name: 'Base', calc: `${d.l} × ${d.w}`, val: fmt(a) },
+          { sw: 'b', name: 'Front &amp; back triangles', calc: `2 × (½ × ${d.l} × ${fmt(s1.val)})`, val: fmt(b) },
+          { sw: 'c', name: 'Left &amp; right triangles', calc: `2 × (½ × ${d.w} × ${fmt(s2.val)})`, val: fmt(c) }
+        ]);
+        html += `<div class="eq-line result">SA ${exact ? '=' : '≈'} ${fmt(a)} + ${fmt(b)} + ${fmt(c)} = ${fmt(tot)} ${UNIT}²</div>`;
+        html += `<p class="eq-note">${v('s₁')} and ${v('s₂')} are slant heights (dashed lines): the distance from the middle of a bottom edge straight up the face to the tip. Each comes from the Pythagorean theorem: ${v('s₁')} = √((${v('w')} ÷ 2)² + ${v('h')}²) ${s1.exact ? '=' : '≈'} ${fmt(s1.val)} and ${v('s₂')} = √((${v('l')} ÷ 2)² + ${v('h')}²) ${s2.exact ? '=' : '≈'} ${fmt(s2.val)}.${exact ? '' : ' They’re rounded to one decimal place, so the total is close but not exact.'}</p>`;
+      } else if (s === 'cyl') {
+        const a = 2 * 3.14 * d.r * d.r, b = 2 * 3.14 * d.r * d.h;
+        html += `<div class="eq-line rule">SA = 2 × (π × ${v('r')} × ${v('r')}) + (2 × π × ${v('r')}) × ${v('h')}</div>`;
+        html += faceRows([
+          { sw: 'a', name: 'Top &amp; bottom circles', calc: `2 × (3.14 × ${d.r} × ${d.r})`, val: fmt(a) },
+          { sw: 'b', name: 'Curved side', calc: `(2 × 3.14 × ${d.r}) × ${d.h}`, val: fmt(b) }
+        ]);
+        html += `<div class="eq-line result">SA ≈ ${fmt(a)} + ${fmt(b)} = ${fmt(a + b)} ${UNIT}²</div>`;
+        html += `<p class="eq-note">Peel the label off a can and it unrolls into a rectangle. One side of that rectangle is the height, ${d.h} ${UNIT}. The other side is the distance around the circle, 2 × π × ${d.r} ≈ ${fmt(2 * 3.14 * d.r)} ${UNIT}. Using 3.14 for π makes the total very close but not exact. The exact answer is ${2 * d.r * d.r + 2 * d.r * d.h}π ${UNIT}².</p>`;
+      }
+    }
+    box.innerHTML = '<div class="eq">' + html + '</div>';
+  }
+
+  document.querySelectorAll('.tab').forEach((t) => {
+    t.addEventListener('click', () => {
+      state.shape = t.dataset.shape;
+      document.querySelectorAll('.tab').forEach((o) => o.setAttribute('aria-selected', String(o === t)));
+      buildSliders();
+      rebuild();
+      renderEq();
+    });
+  });
+  document.querySelectorAll('.measure').forEach((b) => {
+    b.addEventListener('click', () => {
+      state.mode = state.mode === b.dataset.mode ? null : b.dataset.mode;
+      document.querySelectorAll('.measure').forEach((o) => o.setAttribute('aria-pressed', String(o.dataset.mode === state.mode)));
+      rebuild();
+      renderEq();
+    });
+  });
+
+  // follow theme changes
+  try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', rebuild); } catch (e) {}
+  new MutationObserver(rebuild).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  buildSliders();
+  resize();
+  rebuild();
+  renderEq();
+})();
+</script>
+
+</body>
+</html>
