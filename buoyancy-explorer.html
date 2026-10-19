@@ -1,0 +1,1664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Buoyancy Explorer</title>
+<meta name="description" content="Run your own experiments to find out what makes things float or sink.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1f2a37; --muted:#5b6574; --paper:#f7f3ea; --panel:#fff; --line:#e3dccd;
+    --blue:#1d67c9; --blue-soft:#e6f0fc; --green:#23855a; --green-soft:#e2f4ea;
+    --red:#c8432f; --red-soft:#fbeae6; --amber:#e7962b; --amber-soft:#fdf1df; --hl:#fff1b8;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--paper);color:var(--ink);font-family:"Nunito",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.45}
+  .wrap{max-width:1360px;margin:0 auto;padding:16px 16px 32px}
+  header{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 16px;margin-bottom:12px}
+  header h1{font-size:clamp(1.6rem,3.2vw,2.1rem);font-weight:900;margin:0;letter-spacing:-.01em}
+  header p{margin:0;color:var(--muted)}
+  #progress{margin-left:auto;font-weight:800;color:var(--muted);font-size:.9rem}
+
+  /* investigation buttons */
+  .tabs{display:grid;grid-template-columns:repeat(var(--ntabs,5),minmax(0,1fr));gap:10px;margin-bottom:14px}
+  .tab{
+    display:flex;gap:10px;align-items:flex-start;text-align:left;font:inherit;cursor:pointer;
+    background:#fff;border:2px solid var(--line);border-radius:14px;padding:9px 12px;color:var(--ink);
+    transition:border-color .15s,background .15s;
+  }
+  .tab:hover{border-color:#cbbfa6}
+  .tab:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+  .tab .n{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:900;background:#f1ece1;color:var(--muted);font-size:.9rem}
+  .tab .t{font-weight:800;font-size:.92rem;line-height:1.25}
+  .tab .s{display:block;font-weight:700;font-size:.75rem;color:var(--muted);margin-top:2px}
+  .tab[aria-current="true"]{border-color:var(--amber);background:var(--amber-soft)}
+  .tab[aria-current="true"] .n{background:var(--amber);color:#fff}
+  .tab.done .n{background:var(--green);color:#fff}
+  @media (max-width:1100px){
+    .tabs{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px}
+    .tab{flex:0 0 220px;scroll-snap-align:start}
+  }
+
+  /* page layout */
+  .main{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(330px,1fr);grid-template-areas:"stage card" "stage data";grid-template-rows:auto 1fr;gap:16px;align-items:start}
+  .stage{grid-area:stage;container-type:inline-size}
+  #card{grid-area:card}
+  .datacard{grid-area:data}
+  @media (max-width:900px){
+    .main{grid-template-columns:minmax(0,1fr);grid-template-areas:"card" "stage" "data"}
+  }
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+
+  /* tank + its controls: side by side when there's room */
+  .stage-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+  .side{display:flex;flex-direction:column;gap:12px;order:2}
+  .canvas-wrap{position:relative;order:1}
+  @container (min-width:700px){
+    .stage-grid{grid-template-columns:236px minmax(0,1fr)}
+    .side{order:0}
+    .side .chips{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+    .side .chip{padding:4px 8px;font-size:.82rem;gap:5px}
+  }
+  canvas{display:block;width:100%;height:auto;aspect-ratio:640/585;touch-action:none;border-radius:10px;outline:none}
+  canvas:focus-visible{box-shadow:0 0 0 3px var(--amber)}
+  .lock{
+    position:absolute;inset:0;display:none;place-items:center;border-radius:10px;
+    background:rgba(247,243,234,.72);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);
+  }
+  .lock.on{display:grid}
+  .lock div{background:#fff;border:2px solid var(--amber);border-radius:14px;padding:14px 18px;font-weight:800;text-align:center;max-width:80%;box-shadow:0 4px 14px rgba(0,0,0,.08)}
+
+  .readings{display:flex;flex-wrap:wrap;gap:8px}
+  .reading{background:#f2f5f9;border:1px solid #dde5ee;border-radius:10px;padding:6px 10px;flex:1 1 120px}
+  .reading .k{display:block;font-size:.72rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .reading .v{display:block;font-weight:900;font-size:1.08rem;font-variant-numeric:tabular-nums;line-height:1.25}
+  .reading.blue .v{color:var(--blue)}
+
+  .ctl-label{display:flex;justify-content:space-between;align-items:baseline;font-weight:900;font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+  .ctl-label output{font-size:1rem;color:var(--ink);text-transform:none;letter-spacing:0;font-variant-numeric:tabular-nums}
+  .chips{display:flex;flex-wrap:wrap;gap:5px}
+  .chip{font:inherit;font-weight:800;font-size:.88rem;cursor:pointer;border:2px solid var(--line);background:#fff;border-radius:999px;padding:4px 11px;display:inline-flex;align-items:center;gap:7px;color:var(--ink);text-align:left}
+  .chip:hover{border-color:#cbbfa6}
+  .chip:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+  .chip[aria-pressed="true"]{border-color:var(--ink);background:#1f2a37;color:#fff}
+  .chip .sw{width:14px;height:14px;border-radius:4px;border:1px solid rgba(0,0,0,.25);flex:none}
+  .ends{display:flex;justify-content:space-between;font-size:.72rem;font-weight:800;color:var(--muted);margin-top:-2px}
+  .stops{position:relative;height:40px;margin-top:2px}
+  .stop{position:absolute;top:8px;transform:translateX(-50%);font:inherit;font-size:.68rem;font-weight:800;color:var(--muted);background:none;border:0;padding:0 2px;cursor:pointer;white-space:nowrap}
+  .stop::before{content:"";position:absolute;left:50%;top:-8px;width:2px;height:6px;background:#b9b0a0;transform:translateX(-50%)}
+  .stop.low{top:23px}
+  .stop.low::before{top:-23px;height:21px}
+  .stop.on{color:var(--ink)}
+  .stop:focus-visible{outline:2px solid var(--amber)}
+  .objinfo{font-weight:700;color:var(--muted);font-size:.88rem;line-height:1.35}
+  .objinfo b{color:var(--ink)}
+  .rowbtns{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  input[type=range]{width:100%;accent-color:var(--amber);height:28px;margin:0}
+
+  button.btn{font:inherit;font-weight:800;cursor:pointer;border-radius:10px;padding:8px 13px;border:2px solid var(--line);background:#fff;color:var(--ink)}
+  button.btn:hover{border-color:#cbbfa6}
+  button.btn:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+  button.primary{background:var(--ink);border-color:var(--ink);color:#fff}
+  button.primary:hover{background:#334155;border-color:#334155}
+  button.primary:disabled{background:#c9cdd3;border-color:#c9cdd3;cursor:not-allowed}
+  button.go{background:var(--green);border-color:var(--green);color:#fff}
+  button.tap[aria-pressed="true"]{background:#dff3e8;border-color:var(--green);color:#145c3c}
+  .side .rowbtns .btn{flex:1 1 auto}
+
+  /* panel card */
+  .parts{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+  .part{font:inherit;font-weight:800;font-size:.85rem;cursor:pointer;flex:1 1 140px;text-align:left;border:2px solid var(--line);background:#fff;border-radius:10px;padding:6px 10px;color:var(--ink)}
+  .part:hover{border-color:#cbbfa6}
+  .part:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+  .part[aria-current="true"]{border-color:var(--ink);background:#1f2a37;color:#fff}
+  .part.done:not([aria-current="true"]){color:var(--green);border-color:#b9e2cb}
+  .steps{display:flex;gap:6px;margin-bottom:12px}
+  .step{flex:1;text-align:center;font-weight:800;font-size:.78rem;padding:5px 4px;border-radius:999px;background:#f1ece1;color:var(--muted)}
+  .step.now{background:var(--amber);color:#fff}
+  .step.past{background:var(--green-soft);color:var(--green)}
+  #card h2{font-size:1.2rem;line-height:1.3;margin:0 0 8px;font-weight:900}
+  #card p{margin:0 0 10px}
+  .lead{color:var(--muted);font-weight:700}
+  .choices{display:grid;gap:8px;margin:10px 0 14px;border:0;padding:0}
+  .choice{display:flex;gap:10px;align-items:flex-start;border:2px solid var(--line);border-radius:12px;padding:9px 12px;cursor:pointer;font-weight:700;background:#fff}
+  .choice:hover{border-color:#cbbfa6}
+  .choice input{margin-top:4px;accent-color:var(--amber);width:18px;height:18px;flex:none}
+  .choice:has(input:checked){border-color:var(--amber);background:var(--amber-soft)}
+  .choice:has(input:focus-visible){outline:3px solid var(--amber);outline-offset:2px}
+  .mine{background:#f6f3ec;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:.95rem}
+  .mine span{display:block;font-size:.75rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .how{font-weight:700}
+  .need{background:#f2f5f9;border-radius:10px;padding:8px 12px;color:var(--muted);font-weight:700;font-size:.92rem}
+  .need b{color:var(--ink)}
+  .hint{border:2px dashed var(--amber);background:var(--amber-soft);border-radius:12px;padding:10px 12px;margin-bottom:10px}
+  .hint p{margin:0 0 8px !important;font-weight:700}
+  .answers{margin:6px 0 12px}
+  .ans{min-width:64px;font-size:1.1rem}
+  .ans.right{background:var(--green-soft);border-color:var(--green);color:#145c3c}
+  .ans.wrong{background:var(--red-soft);border-color:#efc3ba;color:var(--red)}
+  .fb{border-radius:12px;padding:10px 12px;margin:0 0 12px;font-weight:700}
+  .fb.no{background:var(--red-soft);border:2px solid #efc3ba}
+  .fb.no strong{color:var(--red)}
+  .fb.yes{background:var(--green-soft);border:2px solid #b9e2cb}
+  .fb.yes strong{color:var(--green)}
+  .compare{display:grid;gap:8px;margin:10px 0 12px}
+  .compare div{background:#f6f3ec;border-radius:10px;padding:8px 12px}
+  .compare span{display:block;font-size:.75rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .bigidea{background:var(--blue-soft);border-radius:12px;padding:12px 14px;margin-bottom:12px}
+  .bigidea span{display:block;font-size:.75rem;font-weight:900;color:var(--blue);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
+
+  /* data tables */
+  .datacard h2{font-size:.85rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 8px;font-weight:900}
+  .tables{max-height:420px;overflow:auto;display:grid;gap:12px}
+  .tables h3{margin:0 0 4px;font-size:.95rem;font-weight:900;display:flex;align-items:center;gap:7px}
+  .tables h3 .sw{width:14px;height:14px;border-radius:4px;border:1px solid rgba(0,0,0,.25)}
+  .table-wrap{border:1px solid var(--line);border-radius:10px;overflow:auto}
+  table{border-collapse:collapse;width:100%;font-size:.9rem;font-variant-numeric:tabular-nums}
+  th,td{padding:6px 8px;text-align:left;border-bottom:1px solid #eee7d8;white-space:nowrap}
+  tr:last-child td{border-bottom:0}
+  th{position:sticky;top:0;background:#f6f3ec;font-weight:900;font-size:.78rem;line-height:1.2;white-space:normal;vertical-align:bottom}
+  td.num,th.num{text-align:right}
+  td.idx{color:var(--muted);font-weight:800;width:1%}
+  tr.hl td{background:var(--hl)}
+  tr.flash td{animation:flash 1.2s ease-out}
+  @keyframes flash{from{background:#ffe08a}to{background:transparent}}
+  .float{color:var(--blue);font-weight:800}
+  .sink{color:#7a4b2a;font-weight:800}
+  th.new,td.new{background:#eef6ff}
+  .empty{color:var(--muted);font-weight:700;margin:4px 0 0}
+  .note{color:var(--muted);font-size:.85rem;margin:8px 0 0}
+  footer{margin-top:18px;color:var(--muted);font-size:.85rem}
+  @media (prefers-reduced-motion:reduce){tr.flash td{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Buoyancy Explorer</h1>
+    <p>Pick a question, make a prediction, then run tests to find out.</p>
+    <span id="progress"></span>
+  </header>
+
+  <nav class="tabs" id="tabs" aria-label="Investigations"></nav>
+
+  <div class="main">
+    <section class="stage box" aria-label="Test tank">
+      <div class="stage-grid">
+        <div class="side">
+          <div id="controls" class="side" style="order:0"></div>
+          <div class="readings" id="readings"></div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="scene" width="640" height="585" tabindex="0" aria-label="A tank of water for testing blocks"></canvas>
+          <div class="lock" id="lock"><div>Make your prediction first, then you can start testing.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="box" id="card" aria-live="polite"></section>
+
+    <section class="box datacard">
+      <h2>Your data</h2>
+      <div class="tables" id="tables"></div>
+      <p class="empty" id="empty">No measurements yet.</p>
+      <p class="note" id="tablenote"></p>
+    </section>
+  </div>
+
+  <footer>1 cm³ of water has a mass of 1 g · 1 mL is the same amount of space as 1 cm³ · Gravity pulls with 9.8 N on every kg · <span id="tankInfo">Tank: 60 cm wide, 30 cm front-to-back, 45 cm tall</span></footer>
+</div>
+
+<script>
+(() => {
+  // =====================================================================
+  //  WORLD (lengths in cm, volumes in cm³ = mL, masses in g, forces in N)
+  // =====================================================================
+  const W = 640, H = 585, PX = 9;                   // logical drawing size; pixels per cm
+  let TW = 60, TD = 30, TH = 45, AREA = TW * TD;    // tank inside: width, front-to-back, height (cm)
+  let TX = 50;                                       // x of the tank's inside left wall
+  const FLOOR = 510, WALL = 7;
+  const BIG_TANK = { w: 60, d: 30, h: 45 };
+  function useTank(t) {
+    TW = t.w; TD = t.d; TH = t.h; AREA = TW * TD;
+    TX = Math.round((W - TW * PX) / 2);
+    const el = document.getElementById('tankInfo');
+    if (el) el.textContent = `Tank: ${TW} cm wide, ${TD} cm front-to-back, ${TH} cm tall`;
+  }
+  const G = 9.8;
+  const MAX_TOP = (FLOOR - 6) / PX;                  // highest a block's top can go (cm)
+
+  const MATS = {
+    cork:     { name: 'Cork',       d: 0.24, fill: '#c79a63', edge: '#8d6638', tex: 'dots' },
+    pine:     { name: 'Pine wood',  d: 0.50, fill: '#e6c38c', edge: '#a77b42', tex: 'grain' },
+    ice:      { name: 'Ice',        d: 0.92, fill: '#d6eefa', edge: '#7fb3cf', tex: 'ice' },
+    wax:      { name: 'Candle wax', d: 0.92, fill: '#f5ecd6', edge: '#c4b07f', tex: 'plain' },
+    rubber:   { name: 'Rubber',     d: 1.20, fill: '#e98aa0', edge: '#b05a6f', tex: 'plain' },
+    aluminum: { name: 'Aluminum',   d: 2.70, fill: '#cdd3da', edge: '#8a949f', tex: 'metal' },
+    granite:  { name: 'Granite',    d: 2.70, fill: '#a5a5a5', edge: '#6d6d6d', tex: 'speckle' },
+    steel:    { name: 'Steel',      d: 7.90, fill: '#7a8692', edge: '#4b5560', tex: 'metal' },
+    gold:     { name: 'Gold',       d: 19.30, fill: '#f1c84b', edge: '#b08a22', tex: 'metal' }
+  };
+  const ALL_MATS = Object.keys(MATS);
+  const SINKERS = ['rubber', 'aluminum', 'granite', 'steel', 'gold'];
+  // block edge lengths the size slider steps through (cm): from a speck to a giant
+  const EDGES = [0.3, 0.4, 0.5, 0.6, 0.8, 1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 18, 20, 22, 25, 28];
+  const DEFAULT_EDGE = 8;
+  const FLOW = 3000;                 // mL per second through the spigot or the drain
+  const MAX_WATER = 42;              // the spigot shuts off when the water is this deep (cm)
+  // masses the weight slider steps through (g)
+  const MASSES = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000];
+  const DEFAULT_MASS = 1000;
+  // round volumes the size slider steps through in the water-rise test (cm³)
+  const VOLS = [1000, 2000, 3000, 4000, 5000, 6000, 8000, 10000];   // 1 L to 10 L
+  const DEFAULT_VOL = 2000;
+  // materials on the weight slider in part B, lightest to heaviest (one of each look-alike pair)
+  const WEIGHT_STOPS = ['cork', 'pine', 'ice', 'rubber', 'aluminum', 'steel', 'gold'];
+
+  // ---------- formatting ----------
+  const dec = v => { const a = Math.abs(v); return a >= 100 ? 0 : a >= 1 ? 1 : 3; };
+  function num(v) {                       // sensible digits for any size of number
+    const a = Math.abs(v);
+    if (a === 0) return '0';
+    if (a < 0.001) return v.toPrecision(2);
+    return v.toLocaleString('en-US', { maximumFractionDigits: dec(v) });
+  }
+  const one = v => (Math.round(v * 10) / 10).toFixed(1);
+  const fN = F => `${num(F)} N`;
+  const cm3 = v => `${num(v)} cm³`;
+  const grams = m => `${num(m)} g`;
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const matName = k => MATS[k].name;
+  const matLower = k => MATS[k].name.toLowerCase();
+
+  // =====================================================================
+  //  INVESTIGATIONS
+  // =====================================================================
+  const DEFS = [
+    {
+      id: 'size', tab: 'Does the size matter?', sub: 'Bigger vs. smaller',
+      mode: 'drop', mats: ALL_MATS, water: 20, groupByMat: true,
+      question: 'If you make a block bigger or smaller, but keep the material the same, does that change whether it floats or sinks?',
+      options: [
+        { id: 'bigSink', text: 'Bigger blocks are more likely to sink.' },
+        { id: 'bigFloat', text: 'Bigger blocks are more likely to float.' },
+        { id: 'none', text: 'Size doesn’t change it. If one size floats, every size of that material floats.' }
+      ],
+      correct: 'none',
+      how: 'Pick a material, slide the size, then drag the block into the water and let go. Try the same material from tiny to giant. Each material gets its own table.',
+      columns: [
+        { label: 'Volume (cm³)', num: true, get: r => num(r.vol) },
+        { label: 'Mass (g)', num: true, get: r => num(r.mass) },
+        { label: 'Result', html: true, get: r => resultHTML(r) }
+      ],
+      need(rows) {
+        const miss = [];
+        if (rows.length < 3) miss.push(`test at least <b>3 blocks</b> (you have ${rows.length})`);
+        if (!matWithSizes(rows, 2)) miss.push('test <b>one material in two different sizes</b>');
+        return miss;
+      },
+      feedback(choice, rows) {
+        const want = choice === 'bigSink' ? 'float' : 'sink';
+        const pair = sameMatPair(rows, want);
+        if (pair) {
+          const A = rows[pair[0]], B = rows[pair[1]];
+          const verb = want === 'float' ? 'floated' : 'sank';
+          return { rows: pair, msg: `Look at your ${matLower(A.mat)} table. The ${cm3(A.vol)} block and the ${cm3(B.vol)} block both ${verb}. Making it bigger didn’t make it ${want === 'float' ? 'sink' : 'float'}.` };
+        }
+        const other = want === 'float' ? 'floats, like pine wood or cork' : 'sinks, like steel or granite';
+        return { rows: [], msg: `Your data doesn’t show that yet. Try a material that ${other}. Make it comically small, then comically big. What happens to the giant one?` };
+      },
+      idea: 'Size doesn’t decide whether something floats or sinks. A tiny pebble of granite sinks, and so does a huge boulder. A small chip of wood floats, and so does a whole log.'
+    },
+    {
+      id: 'light', group: 'weight', tab: 'Does the weight matter?', sub: 'Light vs. heavy',
+      part: 'A: Do light things float?',
+      mode: 'drop', control: 'mass', mats: ['granite', 'gold'], water: 20,
+      question: 'Granite and gold blocks sink. If you make a block lighter and lighter, will it float once it’s light enough?',
+      options: [
+        { id: 'yes', text: 'Yes. If it’s light enough, it will float.' },
+        { id: 'no', text: 'No. Even a super light block of granite or gold sinks.' }
+      ],
+      correct: 'no',
+      how: 'Pick granite or gold, slide the mass, then drag the block into the water and let go. Make it as light as you can. Compare its weight with its buoyant force.',
+      columns: [
+        { label: 'Material', get: r => matName(r.mat) },
+        { label: 'Mass (g)', num: true, get: r => num(r.mass) },
+        { label: 'Weight (N)', num: true, get: r => num(r.weight) },
+        { label: 'Buoyant force (N)', num: true, get: r => num(r.force) },
+        { label: 'Result', html: true, get: r => resultHTML(r) }
+      ],
+      need(rows) {
+        const miss = [];
+        if (rows.length < 3) miss.push(`test at least <b>3 blocks</b> (you have ${rows.length})`);
+        if (!rows.some(r => r.mass <= 2)) miss.push('test a block that’s <b>2 g or lighter</b>');
+        return miss;
+      },
+      feedback(choice, rows) {
+        if (choice === 'yes') {
+          let i = -1;
+          rows.forEach((r, k) => { if (i < 0 || r.mass < rows[i].mass) i = k; });
+          const A = rows[i];
+          if (A && A.mass <= 2) return { rows: [i], msg: `Look at row ${rowNo(i)}. That ${matLower(A.mat)} block was only ${grams(A.mass)}${A.mass <= 1 ? ', lighter than a paper clip,' : ''} and it still sank. Its buoyant force (${fN(A.force)}) was smaller than its weight (${fN(A.weight)}).` };
+          return { rows: [], msg: 'Your data can’t tell yet. Slide the mass all the way down and test the lightest block you can make.' };
+        }
+        return { rows: [], msg: '' };
+      },
+      idea: 'Being light doesn’t make something float. When you make a gold block lighter, it also gets smaller, so the water pushes up on it less too. The buoyant force shrinks right along with the weight, and it always stays smaller. A gold block’s buoyant force is always about 1/19 of its weight, and a granite block’s is always a little more than 1/3 of its weight, no matter how big or small the block is.'
+    },
+    {
+      id: 'heavy', group: 'weight', tab: 'Does the weight matter?', sub: 'Light vs. heavy',
+      part: 'B: Does heavier mean more push?',
+      mode: 'drop', control: 'weightMat', mats: WEIGHT_STOPS, fixedEdge: 10, water: 20,
+      sortBy: r => r.weight,
+      question: 'These blocks are all exactly the same size, but they weigh different amounts. When a block is completely underwater, does a heavier block get a bigger buoyant force?',
+      options: [
+        { id: 'yes', text: 'Yes. The heavier the block, the bigger the buoyant force.' },
+        { id: 'same', text: 'No. Blocks that are the same size get the same buoyant force, no matter how heavy they are.' },
+        { id: 'lighter', text: 'No. Lighter blocks get a bigger buoyant force.' }
+      ],
+      correct: 'same',
+      how: 'Slide the weight to pick a block. Push the block all the way under the water, then let go. The measurement is taken the moment you let go. Try light blocks and heavy blocks.',
+      columns: [
+        { label: 'Material', get: r => matName(r.mat) },
+        { label: 'Volume (cm³)', num: true, get: r => num(r.vol) },
+        { label: 'Mass (g)', num: true, get: r => num(r.mass) },
+        { label: 'Weight (N)', num: true, get: r => num(r.weight) },
+        { label: 'Buoyant force when submerged (N)', num: true, get: r => num(r.force) }
+      ],
+      need(rows) {
+        const miss = [];
+        if (rows.length < 3) miss.push(`measure at least <b>3 blocks</b> (you have ${rows.length})`);
+        if (!rows.some(r => MATS[r.mat].d < 1)) miss.push('measure a <b>light block that floats</b> (you’ll have to push it under)');
+        if (!rows.some(r => MATS[r.mat].d > 1)) miss.push('measure a <b>heavy block that sinks</b>');
+        return miss;
+      },
+      feedback(choice, rows) {
+        let lo = -1, hi = -1;
+        rows.forEach((r, k) => { if (lo < 0 || r.weight < rows[lo].weight) lo = k; if (hi < 0 || r.weight > rows[hi].weight) hi = k; });
+        if (lo >= 0 && hi !== lo) {
+          const L = rows[lo], Hh = rows[hi];
+          const end = choice === 'yes' ? 'The heavier block didn’t get a bigger push.' : 'The lighter block didn’t get a bigger push.';
+          return { rows: [lo, hi], msg: `Look at ${rowsTxt([lo, hi])}. The ${matLower(Hh.mat)} block weighs ${fN(Hh.weight)} and the ${matLower(L.mat)} block weighs only ${fN(L.weight)}, but they both got ${fN(L.force)} of buoyant force. ${end}` };
+        }
+        return { rows: [], msg: 'Measure a very light block and a very heavy block. Compare their buoyant forces.' };
+      },
+      idea: 'These blocks are all the same size, and underwater they all got the same buoyant force: 9.8 N. How heavy the block was didn’t change the water’s push. Here’s a clue to keep in mind for later: every one of these blocks takes up exactly the same amount of space in the water.'
+    },
+    {
+      id: 'material', tab: 'What decides float or sink?', sub: 'Size, mass, or material?',
+      mode: 'drop', mats: ALL_MATS, water: 20, densityUnlockAt: 4,
+      question: 'Some things float and some things sink. What do you think decides which one happens?',
+      options: [
+        { id: 'size', text: 'How big it is (its size)' },
+        { id: 'mass', text: 'How heavy it is (its mass)' },
+        { id: 'material', text: 'What material it’s made of' }
+      ],
+      correct: 'material',
+      how: 'Test lots of different materials and sizes. Then look for a pattern in your table: what do all the floaters have in common?',
+      columns: [
+        { label: 'Material', get: r => matName(r.mat) },
+        { label: 'Volume (cm³)', num: true, get: r => num(r.vol) },
+        { label: 'Mass (g)', num: true, get: r => num(r.mass) },
+        { label: 'Result', html: true, get: r => resultHTML(r) },
+        { label: 'Mass ÷ Volume (g per cm³)', num: true, density: true, get: r => (r.mass / r.vol).toFixed(2) }
+      ],
+      need(rows) {
+        const miss = [];
+        if (rows.length < 5) miss.push(`test at least <b>5 blocks</b> (you have ${rows.length})`);
+        if (!rows.some(r => r.result === 'float')) miss.push('find at least <b>one block that floats</b>');
+        if (!rows.some(r => r.result === 'sink')) miss.push('find at least <b>one block that sinks</b>');
+        return miss;
+      },
+      feedback(choice, rows) {
+        if (choice === 'size') {
+          const p = findPair(rows, (a, b) => a.vol === b.vol && a.result === 'float' && b.result === 'sink');
+          if (p) return { rows: p, msg: `Look at ${rowsTxt(p)}. They’re exactly the same size (${cm3(rows[p[0]].vol)}), but the ${matLower(rows[p[0]].mat)} floated and the ${matLower(rows[p[1]].mat)} sank. So size can’t be what decides it.` };
+          const q = findPair(rows, (a, b) => a.result === 'float' && b.result === 'sink' && a.vol > b.vol);
+          if (q) return { rows: q, msg: `Look at ${rowsTxt(q)}. The bigger block (${cm3(rows[q[0]].vol)}) floated and the smaller one (${cm3(rows[q[1]].vol)}) sank. So being big doesn’t make something sink, and being small doesn’t make it float.` };
+          return { rows: [], msg: 'Your data can’t tell yet. Try two blocks that are the same size but made of different materials. Do they always do the same thing?' };
+        }
+        if (choice === 'mass') {
+          const p = findPair(rows, (a, b) => a.result === 'float' && b.result === 'sink' && a.mass > b.mass);
+          if (p) {
+            const A = rows[p[0]], B = rows[p[1]];
+            return { rows: p, msg: `Look at ${rowsTxt(p)}. The ${matLower(A.mat)} (${grams(A.mass)}) floated, but the ${matLower(B.mat)} (${grams(B.mass)}) sank. The heavier block floated! So mass alone can’t be what decides it.` };
+          }
+          return { rows: [], msg: 'Your data can’t tell yet. Try a giant block of pine wood and a tiny block of aluminum. Which one is heavier? Which one floats?' };
+        }
+        return { rows: [], msg: '' };
+      },
+      idea: 'It’s the material, and here’s why. Every material has its own <b>density</b>: how heavy it is for its size. You find it by dividing mass by volume (look at that column in your table). Water’s density is 1 g per cm³. Materials with a density less than 1 float in water, and materials with a density more than 1 sink. That’s why ice and candle wax, two different materials with the same density, float exactly the same way. It’s also why size and mass on their own don’t decide it: a bigger block is heavier, but it’s still just as heavy for its size.'
+    },
+    {
+      id: 'depth', group: 'deep', tab: 'Does deeper mean more push?', sub: 'Deeper water, deeper block',
+      part: 'B: Does a deeper block get more push?',
+      mode: 'held', water: 25, testMat: 'aluminum', testEdge: 10,
+      question: 'Imagine slowly pushing a block down into the water, deeper and deeper. What happens to the buoyant force (the water’s push up on the block)?',
+      options: [
+        { id: 'up', text: 'It keeps getting bigger the deeper the block goes.' },
+        { id: 'down', text: 'It gets smaller the deeper the block goes.' },
+        { id: 'same', text: 'It stays the same the whole time.' },
+        { id: 'fill', text: 'It gets bigger while the block goes into the water, then stays the same once the block is completely underwater.' }
+      ],
+      correct: 'fill',
+      how: 'Drag the block up and down. Each time you let go with the block in the water, a measurement goes into one of two tables: completely underwater, or partly underwater. Fill in both.',
+      groups: [
+        { key: 'all', title: 'Completely underwater', test: r => r.frac >= 0.9995 },
+        { key: 'part', title: 'Partly underwater', test: r => r.frac < 0.9995 }
+      ],
+      sortBy: r => r.depth,
+      columns: [
+        { label: 'Depth of block’s bottom (cm)', num: true, get: r => one(r.depth) },
+        { label: 'How much is underwater', get: r => underText(r.frac) },
+        { label: 'Buoyant force (N)', num: true, get: r => one(r.force) }
+      ],
+      need(rows) { return depthNeed(rows, 'depth', 'depths'); },
+      feedback(choice, rows) { return depthTablesFeedback(choice, rows); },
+      idea: 'Remember how the water rose when you dropped a block in? That’s the block pushing water out of the way. While the block is going into the water, it pushes more and more water out of the way, and the buoyant force keeps increasing. Once the block is completely underwater, it isn’t pushing any more water out of the way, and the buoyant force stops changing, no matter how deep the block goes.'
+    },
+    {
+      id: 'water', group: 'deep', tab: 'Does deeper mean more push?', sub: 'Deeper water, deeper block',
+      part: 'A: Does deeper water push harder?',
+      mode: 'slider', water: 5, testMat: 'aluminum', testEdge: 10,
+      question: 'A block is sitting on the bottom of the tank. If you add more and more water, what happens to the buoyant force on the block?',
+      options: [
+        { id: 'up', text: 'It keeps getting bigger as the water gets deeper.' },
+        { id: 'down', text: 'It gets smaller as the water gets deeper.' },
+        { id: 'same', text: 'It doesn’t change at all.' },
+        { id: 'fill', text: 'It gets bigger until the water covers the block, then stays the same.' }
+      ],
+      correct: 'fill',
+      how: 'Click the spigot to pour water in, and the drain to let water out. Each time the water stops moving, a measurement is recorded. Try water that only covers part of the block, and water that covers all of it.',
+      columns: [
+        { label: 'Water depth (cm)', num: true, get: r => one(r.wdepth) },
+        { label: 'How much of the block is underwater', get: r => underText(r.frac) },
+        { label: 'Buoyant force (N)', num: true, get: r => one(r.force) }
+      ],
+      need(rows) { return depthNeed(rows, 'wdepth', 'water depths'); },
+      feedback(choice, rows) { return depthFeedback(choice, rows, 'wdepth', 'of water'); },
+      idea: 'Adding water made the buoyant force bigger, but only until the water covered the block. After that, piling more water on top didn’t change it at all. A block on the bottom of a swimming pool gets the same buoyant force as one on the bottom of the ocean. In part B, you’ll keep the water the same and move the block instead.'
+    },
+    {
+      id: 'displace', tab: 'How much does the water rise?', sub: 'Where does the water go?',
+      mode: 'drop', mats: SINKERS, control: 'volume', noForces: true, bonus: true,
+      sortBy: r => r.vol + r.mass / 1e9, tank: { w: 40, d: 25, h: 40 }, waterVw: 20000,
+      question: 'When you drop an object into the tank and it sinks to the bottom, the water level goes up. How much does it go up?',
+      options: [
+        { id: 'same', text: 'The same amount for every object.' },
+        { id: 'mass', text: 'More for heavier objects. It depends on the mass.' },
+        { id: 'material', text: 'It depends on what material the object is made of.' },
+        { id: 'volume', text: 'Exactly as much as the object’s volume.' }
+      ],
+      correct: 'volume',
+      how: 'The tank starts with exactly 20 liters (L) of water. The dashed line marks where it starts. Pick a material, slide the size, then drag the block into the water and let go. The table records the water reading before and after.',
+      columns: [
+        { label: 'Material', get: r => matName(r.mat) },
+        { label: 'Mass (kg)', num: true, get: r => num(r.mass / 1000) },
+        { label: 'Object volume (L)', num: true, get: r => num(r.vol / 1000) },
+        { label: 'Water reading before → after (L)', num: true, get: r => `${num(r.before / 1000)} → ${num(r.after / 1000)}` },
+        { label: 'Rise (L)', num: true, get: r => num((r.after - r.before) / 1000) }
+      ],
+      need(rows) {
+        const miss = [];
+        if (rows.length < 3) miss.push(`test at least <b>3 objects</b> (you have ${rows.length})`);
+        if (new Set(rows.map(r => r.vol)).size < 2) miss.push('use at least <b>two different sizes</b>');
+        if (new Set(rows.map(r => r.mat)).size < 2) miss.push('use at least <b>two different materials</b>');
+        return miss;
+      },
+      feedback(choice, rows) {
+        const rise = r => `${num((r.after - r.before) / 1000)} L`;
+        const kg = r => `${num(r.mass / 1000)} kg`;
+        if (choice === 'same') {
+          const p = findPair(rows, (a, b) => a.vol !== b.vol);
+          if (p) return { rows: p, msg: `Look at ${rowsTxt(p)}. One object made the water rise ${rise(rows[p[0]])}, and the other made it rise ${rise(rows[p[1]])}. That’s not the same amount.` };
+        }
+        if (choice === 'mass') {
+          const p = findPair(rows, (a, b) => a.vol === b.vol && a.mass !== b.mass);
+          if (p) {
+            const A = rows[p[0]], B = rows[p[1]];
+            return { rows: p, msg: `Look at ${rowsTxt(p)}. Those objects have different masses (${kg(A)} and ${kg(B)}), but the water rose by the same ${rise(A)} both times. So mass isn’t what decides it.` };
+          }
+          const q = findPair(rows, (a, b) => a.mass > b.mass && a.vol < b.vol);
+          if (q) return { rows: q, msg: `Look at ${rowsTxt(q)}. The heavier object made the water rise less. So it can’t be the mass.` };
+          return { rows: [], msg: 'Your data can’t tell yet. Try two objects that are the same size but made of different materials, like aluminum and gold. Does the heavier one make the water rise more?' };
+        }
+        if (choice === 'material') {
+          const p = findPair(rows, (a, b) => a.vol === b.vol && a.mat !== b.mat);
+          if (p) return { rows: p, msg: `Look at ${rowsTxt(p)}. Different materials, but the water rose by the same ${rise(rows[p[0]])} both times. Now compare each rise to the object volume column.` };
+          const q = findPair(rows, (a, b) => a.mat === b.mat && a.vol !== b.vol);
+          if (q) return { rows: q, msg: `Look at ${rowsTxt(q)}. Same material, but the water rose by different amounts. So it isn’t the material. Compare each rise to the object volume column.` };
+          return { rows: [], msg: 'Your data can’t tell yet. Try two different materials that are the same size. Does the water rise by the same amount?' };
+        }
+        return { rows: [], msg: 'Compare the rise column to the object volume column.' };
+      },
+      idea: 'When an object goes underwater, it takes up space that the water used to have, so the water moves up out of its way. The water reading rises by exactly the object’s volume. A 2 L block raises it 2 L, whether it’s light aluminum or heavy gold. Scientists use this trick to measure the volume of lumpy things, like rocks, that you can’t measure with a ruler.'
+    }
+  ];
+
+  const ORDER = ['size', 'light', 'heavy', 'displace', 'water', 'depth', 'material'];
+  const INV = ORDER.map(id => DEFS.find(d => d.id === id));
+  INV.forEach(d => { d.group = d.group || d.id; });
+  const GROUPS = [...new Set(INV.map(d => d.group))];
+
+  // ---------- shared helpers for feedback ----------
+  function displayOrder() {                // original row indexes, in the order the table shows them
+    const inv = INV[cur], rows = prog[cur].rows, idx = rows.map((_, i) => i);
+    return inv.sortBy && !inv.groups ? idx.sort((a, b) => inv.sortBy(rows[a]) - inv.sortBy(rows[b])) : idx;
+  }
+  const rowNo = i => displayOrder().indexOf(i) + 1;
+  const rowsTxt = p => { const a = rowNo(p[0]), b = rowNo(p[1]); return `rows ${Math.min(a, b)} and ${Math.max(a, b)}`; };
+  function reading(v, vol) {
+    return v.toLocaleString('en-US', { maximumFractionDigits: Math.max(0, dec(vol)) });
+  }
+  function findPair(rows, test) {
+    for (let i = 0; i < rows.length; i++) for (let j = 0; j < rows.length; j++)
+      if (i !== j && test(rows[i], rows[j])) return [i, j];
+    return null;
+  }
+  function matWithSizes(rows, n) {
+    const by = {};
+    rows.forEach(r => { (by[r.mat] = by[r.mat] || new Set()).add(r.edge); });
+    return Object.values(by).some(s => s.size >= n);
+  }
+  function sameMatPair(rows, result) {
+    let best = null;
+    for (let i = 0; i < rows.length; i++) for (let j = 0; j < rows.length; j++) {
+      const a = rows[i], b = rows[j];
+      if (i !== j && a.mat === b.mat && a.result === result && b.result === result && a.vol < b.vol
+        && (!best || b.vol / a.vol > rows[best[1]].vol / rows[best[0]].vol)) best = [i, j];
+    }
+    return best;
+  }
+  function resultHTML(r) {
+    return r.result === 'float' ? `<span class="float">Floats</span> (${Math.round(r.pct)}% underwater)` : '<span class="sink">Sinks</span>';
+  }
+  function underText(f) {
+    if (f <= 0.0005) return 'None';
+    if (f >= 0.9995) return 'All';
+    return `Part (${Math.round(f * 100)}%)`;
+  }
+  function underPhrase(f) {
+    if (f <= 0.0005) return 'the block out of the water';
+    if (f >= 0.9995) return 'the block completely underwater';
+    return `${Math.round(f * 100)}% of the block underwater`;
+  }
+  function depthNeed(rows, key, word) {
+    const miss = [];
+    const part = rows.filter(r => r.frac > 0.0005 && r.frac < 0.9995);
+    const all = rows.filter(r => r.frac >= 0.9995).map(r => r[key]);
+    if (!part.length) miss.push('measure once with the block <b>partly underwater</b>');
+    const spread = all.length >= 2 ? Math.max(...all) - Math.min(...all) : 0;
+    if (all.length < 2 || spread < 2) miss.push(`measure twice with the block <b>completely underwater</b>, at ${word} at least 2 cm apart`);
+    return miss;
+  }
+  function depthTablesFeedback(choice, rows) {
+    const isAll = r => r.frac >= 0.9995, isPart = r => r.frac < 0.9995;
+    if (choice === 'up' || choice === 'down') {
+      let best = null;
+      rows.forEach((a, i) => rows.forEach((b, j) => {
+        if (isAll(a) && isAll(b) && b.depth - a.depth >= 2 && (!best || b.depth - a.depth > rows[best[1]].depth - rows[best[0]].depth)) best = [i, j];
+      }));
+      if (best) {
+        const A = rows[best[0]], B = rows[best[1]];
+        return { rows: best, msg: `Look at your “completely underwater” table. The block was ${one(A.depth)} cm deep and then ${one(B.depth)} cm deep, and the buoyant force was ${one(A.force)} N both times. It didn’t get ${choice === 'up' ? 'bigger' : 'smaller'}.` };
+      }
+    }
+    if (choice === 'same') {
+      const p = findPair(rows, (a, b) => isPart(a) && isAll(b));
+      if (p) {
+        const A = rows[p[0]], B = rows[p[1]];
+        return { rows: p, msg: `Your “partly underwater” table shows ${one(A.force)} N when ${Math.round(A.frac * 100)}% of the block was underwater, but your “completely underwater” table shows ${one(B.force)} N. So it did change.` };
+      }
+      const q = findPair(rows, (a, b) => isPart(a) && isPart(b) && b.force - a.force > 0.15);
+      if (q) return { rows: q, msg: `Look at your “partly underwater” table. The buoyant force went from ${one(rows[q[0]].force)} N to ${one(rows[q[1]].force)} N as more of the block went in. So it did change.` };
+    }
+    return { rows: [], msg: 'Compare your two tables. When does the buoyant force change, and when does it stay the same?' };
+  }
+  function depthFeedback(choice, rows, key, unit) {
+    if (choice === 'up' || choice === 'down') {
+      let best = null;
+      rows.forEach((a, i) => rows.forEach((b, j) => {
+        if (a.frac >= 0.9995 && b.frac >= 0.9995 && b[key] - a[key] >= 2 && (!best || b[key] - a[key] > rows[best[1]][key] - rows[best[0]][key])) best = [i, j];
+      }));
+      if (best) {
+        const A = rows[best[0]], B = rows[best[1]];
+        return { rows: best, msg: `Look at ${rowsTxt(best)}. The block was completely underwater both times, at ${one(A[key])} cm and ${one(B[key])} cm ${unit}. The buoyant force was ${one(A.force)} N both times. It didn’t ${choice === 'up' ? 'get bigger' : 'get smaller'}.` };
+      }
+    }
+    if (choice === 'same') {
+      const isPart = r => r.frac > 0.0005 && r.frac < 0.9995, isAll = r => r.frac >= 0.9995;
+      const p = findPair(rows, (a, b) => isPart(a) && isAll(b))
+        || findPair(rows, (a, b) => isPart(a) && isPart(b) && b.force - a.force > 0.15)
+        || findPair(rows, (a, b) => Math.abs(a.force - b.force) > 0.15);
+      if (p) {
+        const A = rows[p[0]], B = rows[p[1]];
+        return { rows: p, msg: `Look at ${rowsTxt(p)}. With ${underPhrase(A.frac)}, the buoyant force was ${one(A.force)} N. With ${underPhrase(B.frac)}, it was ${one(B.force)} N. So it did change.` };
+      }
+    }
+    return { rows: [], msg: 'Look closely at the buoyant force column. When does it change, and when does it stay the same?' };
+  }
+
+  // =====================================================================
+  //  STATE
+  // =====================================================================
+  const fresh = () => ({ stage: 'predict', prediction: null, pick: null, conclusion: null, rows: [], hl: [], density: false, fb: null, tries: 0 });
+  const prog = INV.map(fresh);
+  let cur = 0;
+  const sim = {
+    mode: 'drop', mat: 'pine', edge: DEFAULT_EDGE, s: DEFAULT_EDGE, mass: 256, x: TW / 2, yb: 23, v: 0,
+    held: true, dragging: false, offX: 0, offY: 0, Vw: 36000, h: 20, sub: 0, wdepth: null,
+    snapped: false, settledT: 0, recorded: true, t: 0, recordTimer: 0
+  };
+
+  // =====================================================================
+  //  PHYSICS
+  // =====================================================================
+  function solveWater(Vw, yb, s) {
+    const a = s * s, h0 = Vw / AREA;
+    if (h0 <= yb) return { h: h0, sub: 0 };
+    const hFull = (Vw + a * s) / AREA;
+    if (hFull >= yb + s) return { h: hFull, sub: s };
+    const h = (Vw - a * yb) / (AREA - a);
+    return { h, sub: h - yb };
+  }
+  function settle() {
+    const r = solveWater(sim.Vw, sim.yb, sim.s);
+    sim.h = r.h; sim.sub = Math.max(0, Math.min(sim.s, r.sub));
+  }
+  const buoyant = () => sim.s * sim.s * sim.sub / 1000 * G;   // N (1 cm³ of water has a mass of 1 g)
+  const weight = () => sim.mass / 1000 * G;                     // N
+
+  function physicsStep(dt) {
+    const s = sim.s;
+    settle();
+    const Fg = weight(), Fb = buoyant(), frac = sim.sub / s;
+    const mEff = sim.mass / 1000 + 0.5 * s * s * sim.sub / 1000; // kg, includes water dragged along
+    const sm = s / 100, vm = sim.v / 100;
+    let c = 0.05;
+    if (frac > 0) {
+      const k = 1000 * G * sm * sm;
+      c = (2 * 0.45 * Math.sqrt(k * mEff) * Math.max(frac, 0.3) + 0.5 * 1000 * 1.2 * sm * sm * frac * Math.abs(vm)) / mEff;
+    }
+    const a = (Fb - Fg) / mEff;
+    sim.v = (sim.v + a * 100 * dt) / (1 + c * dt);
+    sim.yb += sim.v * dt;
+    if (sim.yb <= 0) { sim.yb = 0; if (sim.v < 0) sim.v = 0; }
+    if (sim.yb + s > MAX_TOP) { sim.yb = MAX_TOP - s; if (sim.v > 0) sim.v = 0; }
+    // settle exactly at the floating point once the bobbing has died down
+    const subEq = sim.mass / (s * s);
+    if (subEq < s && frac > 0 && frac < 1 && sim.yb > 1e-4 && Math.abs(sim.v) < Math.max(0.3, s * 0.1) && Math.abs(Fb - Fg) < 0.005 * Fg) {
+      const hEq = (sim.Vw + s * s * subEq) / AREA;
+      sim.yb = hEq - subEq; sim.v = 0; sim.snapped = true;
+    }
+  }
+
+  function setObject(mat, edge) {
+    sim.mat = mat; sim.edge = edge; sim.s = edge; sim.vol = edge * edge * edge;
+    sim.mass = MATS[mat].d * sim.vol;
+  }
+  function setObjectVol(mat, vol) {         // a cube with an exact, round volume
+    sim.mat = mat; sim.vol = vol; sim.s = Math.cbrt(vol); sim.edge = vol;
+    sim.mass = MATS[mat].d * vol;
+  }
+  function setObjectMass(mat, mass) {       // fixed mass: the size follows from the material
+    sim.mat = mat; sim.mass = mass; sim.vol = mass / MATS[mat].d;
+    sim.s = Math.cbrt(sim.vol); sim.edge = sim.s;
+  }
+  const byMass = () => INV[cur].control === 'mass';
+  function setupInvestigation() {
+    const inv = INV[cur];
+    useTank(inv.tank || BIG_TANK);
+    sim.mystery = false;
+    sim.mode = inv.mode;
+    sim.dragging = false; sim.v = 0; sim.snapped = false; sim.settledT = 0; sim.recordTimer = 0;
+    if (inv.mode === 'drop') {
+      if (!inv.mats.includes(sim.mat)) sim.mat = inv.control === 'weightMat' ? 'aluminum' : inv.mats[0];
+      if (inv.control === 'mass') setObjectMass(sim.mat, sim.dropMass || DEFAULT_MASS);
+      else if (inv.control === 'volume') setObjectVol(sim.mat, sim.dropVol || DEFAULT_VOL);
+      else if (inv.control === 'weightMat') { if (!inv.mats.includes(sim.mat)) sim.mat = 'aluminum'; setObject(sim.mat, inv.fixedEdge); }
+      else setObject(sim.mat, sim.dropEdge || DEFAULT_EDGE);
+      sim.Vw = inv.waterVw ?? inv.water * AREA;
+      hover();
+    } else if (inv.mode === 'held') {
+      setObject(inv.testMat, inv.testEdge);
+      sim.Vw = inv.water * AREA;
+      sim.x = TW / 2; sim.yb = inv.water + 6; sim.held = true; sim.recorded = true;
+    } else {
+      setObject(inv.testMat, inv.testEdge);
+      sim.x = TW / 2; sim.yb = 0; sim.held = false; sim.recorded = true;
+      setWaterDepth(sim.wdepth ?? inv.water);
+      sim.waterMoved = false; setSpigot(false); setDrain(false);
+    }
+    settle();
+    if (inBonus()) setupBonusRock();
+  }
+  function hover() {
+    // wait just above the water, so the force arrows have room on screen
+    sim.x = TW / 2;
+    sim.yb = Math.min(sim.Vw / AREA + 3, MAX_TOP - sim.s);
+    sim.v = 0; sim.held = true; sim.recorded = true; sim.snapped = false; sim.settledT = 0;
+  }
+  function setWaterDepth(L) {
+    sim.wdepth = L;
+    sim.Vw = L * AREA - sim.s * sim.s * Math.min(L, sim.s);
+    settle();
+  }
+
+  // ---------- recording ----------
+  function addRow(row, key) {
+    const p = prog[cur];
+    if (p.stage === 'predict') return;
+    const dup = p.rows.findIndex(r => r._key === key);
+    if (dup >= 0) { flashRow(dup); return; }
+    row._key = key;
+    p.rows.push(row);
+    renderTable(p.rows.length - 1);
+    renderCard();
+  }
+
+  // ---------- bonus puzzle (water-rise investigation) ----------
+  const inBonus = () => !!(INV[cur].bonus && prog[cur].bonus);
+  function newPuzzle() {
+    const old = prog[cur].bonus && prog[cur].bonus.vol;
+    let v; do { v = 1000 * (1 + Math.floor(Math.random() * 5)); } while (v === old);
+    prog[cur].bonus = { vol: v, answer: null, solved: false };
+  }
+  function setupBonusRock() {
+    setObjectVol('granite', prog[cur].bonus.vol);
+    sim.mystery = true;
+    hover(); settle();
+  }
+  function recordDrop() {
+    if (inBonus()) return;              // the puzzle rock never goes in the data table
+    const inv = INV[cur];
+    const floats = sim.sub < sim.s - 1e-9 && sim.yb > 1e-4;
+    const vol = sim.vol;
+    const row = { mat: sim.mat, edge: sim.edge, vol, mass: sim.mass, weight: weight(), force: buoyant(), result: floats ? 'float' : 'sink', pct: sim.sub / sim.s * 100 };
+    if (inv.id === 'displace') { row.before = sim.Vw; row.after = sim.Vw + (sim.sub >= sim.s - 1e-9 ? sim.vol : sim.s * sim.s * sim.sub); }
+    addRow(row, byMass() ? `${sim.mat}|m${sim.mass}` : `${sim.mat}|${sim.edge}`);
+  }
+  const pushUnder = () => INV[cur].control === 'weightMat';
+  const fullyUnder = () => sim.sub >= sim.s - 1e-6;
+  function recordSubmerged() {
+    addRow({ mat: sim.mat, vol: Math.pow(sim.s, 3), mass: sim.mass, weight: weight(), force: buoyant() }, sim.mat);
+  }
+  function say(msg) { sim.msg = msg; sim.msgT = 3.5; }
+  function letGo() {                       // the player lets go of a block in a drop investigation
+    if (sim.mode !== 'drop' || prog[cur].stage === 'predict') return;
+    const measured = pushUnder() && fullyUnder();
+    if (measured) recordSubmerged();
+    release();
+    if (measured) sim.recorded = true;
+    else if (pushUnder() && sim.sub > 0) say('Push it all the way under before you let go.');
+  }
+  function recordHeld() {
+    const depth = sim.h - sim.yb;
+    if (depth <= 0.05) return;                       // out of the water: nothing to measure
+    const d = Math.round(depth * 10) / 10;
+    addRow({ depth: d, frac: sim.sub / sim.s, force: buoyant() }, `d${d.toFixed(1)}`);
+  }
+  function recordWater() {
+    addRow({ wdepth: sim.h, frac: sim.sub / sim.s, force: buoyant() }, `w${sim.h.toFixed(1)}`);
+  }
+
+  function update(dt) {
+    sim.t += dt;
+    if (sim.msgT > 0) sim.msgT -= dt;
+    if (sim.mode === 'drop' && !sim.held && !sim.dragging) {
+      for (let i = 0; i < 8; i++) physicsStep(dt / 8);
+      const resting = sim.yb <= 0 && Math.abs(sim.v) < 0.5 && sim.sub > 0;
+      if (sim.snapped || resting) sim.settledT += dt; else sim.settledT = 0;
+      if (!sim.recorded && sim.settledT > 0.35) {
+        sim.recorded = true;
+        if (!pushUnder()) recordDrop();
+        else if (fullyUnder()) recordSubmerged();
+        else say('This block floats. Push it all the way under, then let go.');
+      }
+    }
+    if (sim.mode === 'slider') {
+      const before = sim.Vw, a = sim.s * sim.s;
+      if (sim.spigot) sim.Vw += FLOW * dt;
+      if (sim.drain) sim.Vw -= FLOW * dt;
+      if (sim.Vw <= 0) { sim.Vw = 0; if (sim.drain) setDrain(false); }
+      settle();
+      if (sim.h >= MAX_WATER) { sim.Vw = MAX_WATER * AREA - a * Math.min(MAX_WATER, sim.s); settle(); if (sim.spigot) setSpigot(false); }
+      if (sim.Vw !== before) sim.waterMoved = true;
+      sim.wdepth = sim.h;
+      if (!sim.spigot && !sim.drain && sim.waterMoved) { sim.waterMoved = false; recordWater(); }
+    }
+    if (sim.mode === 'held' && sim.recordTimer > 0 && !sim.dragging) {
+      sim.recordTimer -= dt;
+      if (sim.recordTimer <= 0) recordHeld();
+    }
+    settle();
+  }
+
+  // =====================================================================
+  //  DRAWING
+  // =====================================================================
+  const canvas = document.getElementById('scene'), ctx = canvas.getContext('2d');
+  let UI = 1;
+  const FONT = '"Nunito", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+  const xPx = cm => TX + cm * PX, yPx = cm => FLOOR - cm * PX;
+  function blockRect() {
+    const w = sim.s * PX;
+    return { x: xPx(sim.x - sim.s / 2), y: yPx(sim.yb + sim.s), w, h: w };
+  }
+  function rr(x, y, w, h, r) {
+    r = Math.max(0, Math.min(r, w / 2, h / 2));
+    ctx.beginPath(); ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+
+  function drawBackground() {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#eaf3fb'); g.addColorStop(0.8, '#f6f1e6');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#c9a77c'; ctx.fillRect(0, FLOOR + WALL, W, 12);
+    ctx.fillStyle = '#b08d62'; ctx.fillRect(0, FLOOR + WALL + 12, W, 3);
+    ctx.fillStyle = '#ece3d3'; ctx.fillRect(0, FLOOR + WALL + 15, W, H);
+  }
+  function drawTankBack() {
+    ctx.fillStyle = 'rgba(214,232,244,0.55)';
+    ctx.fillRect(xPx(0), yPx(TH), TW * PX, TH * PX);
+  }
+  function drawScales() {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(40,70,100,0.55)'; ctx.fillStyle = 'rgba(40,70,100,0.8)';
+    ctx.textBaseline = 'middle';
+    ctx.font = `800 ${11 * UI}px ${FONT}`;
+    if (sim.mode === 'drop') {          // mL markings on the right wall
+      ctx.textAlign = 'right';
+      const maxL = AREA * TH, nice = x => { const p = Math.pow(10, Math.floor(Math.log10(x))); const f = x / p; return (f >= 5 ? 5 : f >= 2 ? 2 : 1) * p; };
+      const big = nice(maxL / 8), step = big / 5;
+      for (let mL = step; mL <= maxL - step / 2; mL += step) {
+        const y = yPx(mL / AREA), major = Math.abs(mL / big - Math.round(mL / big)) < 1e-6;
+        ctx.lineWidth = major ? 2 : 1;
+        ctx.beginPath(); ctx.moveTo(xPx(TW), y); ctx.lineTo(xPx(TW) - (major ? 13 : 6), y); ctx.stroke();
+        if (major) ctx.fillText(`${num(mL / 1000)} L`, xPx(TW) - 16, y);
+      }
+    } else {                            // cm ruler on the left wall
+      ctx.textAlign = 'left';
+      for (let c = 1; c < TH; c++) {
+        const y = yPx(c), major = c % 5 === 0;
+        ctx.lineWidth = major ? 2 : 1;
+        ctx.beginPath(); ctx.moveTo(xPx(0), y); ctx.lineTo(xPx(0) + (major ? 13 : 6), y); ctx.stroke();
+        if (major) ctx.fillText(`${c} cm`, xPx(0) + 16, y);
+      }
+    }
+    ctx.restore();
+  }
+  function hashRand(i) { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+  function drawRock() {
+    const r = blockRect(), cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    const pts = [[-.48, .1], [-.42, -.32], [-.15, -.5], [.2, -.46], [.46, -.22], [.5, .16], [.36, .45], [0, .5], [-.34, .44]];
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.2)'; ctx.shadowBlur = sim.dragging ? 14 : 6; ctx.shadowOffsetY = sim.dragging ? 6 : 2;
+    ctx.beginPath();
+    pts.forEach(([px, py], i) => { const x = cx + px * r.w, y = cy + py * r.h; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+    ctx.closePath();
+    const g = ctx.createLinearGradient(r.x, r.y, r.x + r.w, r.y + r.h);
+    g.addColorStop(0, '#b9b2a6'); g.addColorStop(1, '#6f665a');
+    ctx.fillStyle = g; ctx.fill();
+    ctx.shadowColor = 'transparent';
+    ctx.lineWidth = 2.5; ctx.strokeStyle = '#4f483f'; ctx.stroke();
+    ctx.font = `900 ${Math.min(30 * UI, r.w / 2.5)}px ${FONT}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.strokeText('?', cx, cy + 2);
+    ctx.fillStyle = '#1f2a37'; ctx.fillText('?', cx, cy + 2);
+    ctx.restore();
+  }
+  function drawBlock() {
+    if (sim.mystery) return drawRock();
+    const r = blockRect(), m = MATS[sim.mat];
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.18)';
+    ctx.shadowBlur = sim.dragging ? 14 : 6; ctx.shadowOffsetY = sim.dragging ? 6 : 2;
+    rr(r.x, r.y, r.w, r.h, 4);
+    if (m.tex === 'metal') {
+      const g = ctx.createLinearGradient(r.x, r.y, r.x + r.w, r.y + r.h);
+      g.addColorStop(0, '#ffffff'); g.addColorStop(0.25, m.fill); g.addColorStop(1, m.edge);
+      ctx.fillStyle = g;
+    } else ctx.fillStyle = m.fill;
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+    if (r.w > 14) {
+      ctx.save(); rr(r.x, r.y, r.w, r.h, 4); ctx.clip();
+      if (m.tex === 'grain') {
+        ctx.strokeStyle = 'rgba(150,100,45,0.45)'; ctx.lineWidth = 1.5;
+        for (let i = 1; i < 6; i++) {
+          const yy = r.y + r.h * i / 6;
+          ctx.beginPath(); ctx.moveTo(r.x, yy);
+          ctx.bezierCurveTo(r.x + r.w * .3, yy - 4, r.x + r.w * .6, yy + 4, r.x + r.w, yy); ctx.stroke();
+        }
+      } else if (m.tex === 'dots' || m.tex === 'speckle') {
+        const n = Math.min(900, Math.round(r.w * r.h / 70));
+        for (let i = 0; i < n; i++) {
+          ctx.fillStyle = m.tex === 'dots' ? 'rgba(120,80,40,0.45)' : (i % 3 ? 'rgba(40,40,40,0.55)' : 'rgba(255,255,255,0.7)');
+          ctx.beginPath(); ctx.arc(r.x + hashRand(i) * r.w, r.y + hashRand(i + 99) * r.h, m.tex === 'dots' ? 1.6 : 1.3, 0, Math.PI * 2); ctx.fill();
+        }
+      } else if (m.tex === 'ice') {
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(r.x + r.w * .18, r.y + r.h * .25); ctx.lineTo(r.x + r.w * .45, r.y + r.h * .12); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(r.x + r.w * .2, r.y + r.h * .45); ctx.lineTo(r.x + r.w * .38, r.y + r.h * .36); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    rr(r.x, r.y, r.w, r.h, 4);
+    ctx.lineWidth = r.w > 14 ? 2.5 : 1.5; ctx.strokeStyle = m.edge; ctx.stroke();
+    ctx.restore();
+  }
+  function drawBlockTint() {
+    if (sim.sub <= 0 || sim.mystery) return;
+    const r = blockRect(), top = Math.max(r.y, yPx(sim.h));
+    ctx.save(); rr(r.x, r.y, r.w, r.h, 4); ctx.clip();
+    ctx.fillStyle = 'rgba(40,120,210,0.22)';
+    ctx.fillRect(r.x, top, r.w, r.y + r.h - top);
+    ctx.restore();
+  }
+  function drawTinyRing() {
+    const r = blockRect();
+    if (r.w >= 24) return;
+    ctx.save();
+    ctx.setLineDash([4, 4]); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(184,107,12,0.9)';
+    ctx.beginPath(); ctx.arc(r.x + r.w / 2, r.y + r.h / 2, 20, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+  function drawWater() {
+    if (sim.h <= 0.01) return;
+    const top = yPx(sim.h), left = xPx(0), right = xPx(TW);
+    ctx.save();
+    const g = ctx.createLinearGradient(0, top, 0, FLOOR);
+    g.addColorStop(0, 'rgba(70,150,225,0.36)'); g.addColorStop(1, 'rgba(25,90,175,0.5)');
+    ctx.fillStyle = g; ctx.fillRect(left, top, right - left, FLOOR - top);
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(left, top); ctx.lineTo(right, top); ctx.stroke();
+    ctx.restore();
+  }
+  function drawTankWalls() {
+    ctx.save();
+    ctx.fillStyle = '#9fb7c8';
+    ctx.fillRect(xPx(0) - WALL, yPx(TH) - 4, WALL, TH * PX + 4 + WALL);
+    ctx.fillRect(xPx(TW), yPx(TH) - 4, WALL, TH * PX + 4 + WALL);
+    ctx.fillRect(xPx(0) - WALL, FLOOR, TW * PX + 2 * WALL, WALL);
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.fillRect(xPx(0) - WALL + 2, yPx(TH), 2, TH * PX);
+    ctx.fillRect(xPx(TW) + 2, yPx(TH), 2, TH * PX);
+    ctx.restore();
+  }
+  const SPIGOT = () => ({ pipeY: yPx(TH) - 46, nozzleX: xPx(14) });
+  const SPIGOT_HIT = () => { const g = SPIGOT(); return { x: g.nozzleX - 34, y: g.pipeY - 14 }; };
+  const DRAIN = () => ({ x: xPx(TW - 6), wheelY: FLOOR + 44 });
+  function drawSpigot() {
+    const { pipeY, nozzleX } = SPIGOT();
+    ctx.save();
+    if (sim.spigot) {
+      const y0 = pipeY + 40, surf = sim.h > 0 ? yPx(sim.h) : FLOOR;
+      ctx.fillStyle = 'rgba(60,140,220,0.8)'; ctx.fillRect(nozzleX - 5, y0, 10, surf - y0);
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 2; ctx.setLineDash([9, 12]); ctx.lineDashOffset = -sim.t * 220;
+      ctx.beginPath(); ctx.moveTo(nozzleX, y0); ctx.lineTo(nozzleX, surf); ctx.stroke(); ctx.setLineDash([]);
+    }
+    ctx.fillStyle = '#8a96a3';
+    rr(0, pipeY, nozzleX + 12, 16, 4); ctx.fill();
+    rr(nozzleX - 11, pipeY, 22, 40, 5); ctx.fill();
+    ctx.fillStyle = '#6f7a86'; ctx.fillRect(nozzleX - 13, pipeY + 35, 26, 5);
+    const hx = nozzleX - 34;
+    ctx.fillRect(hx - 3, pipeY - 12, 6, 12);
+    ctx.save(); ctx.translate(hx, pipeY - 14); ctx.rotate(sim.spigot ? Math.PI / 2 : 0);
+    ctx.fillStyle = sim.spigot ? '#23855a' : '#c8432f'; rr(-18, -5, 36, 10, 5); ctx.fill();
+    ctx.restore();
+    ctx.restore();
+  }
+  function drawDrain() {
+    const { x, wheelY } = DRAIN();
+    ctx.save();
+    ctx.fillStyle = '#8a96a3'; ctx.fillRect(x - 7, FLOOR + WALL, 14, H - FLOOR - WALL);
+    if (sim.drain && sim.Vw > 0) {
+      ctx.fillStyle = 'rgba(60,140,220,0.9)'; ctx.fillRect(x - 4, FLOOR, 8, H - FLOOR);
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 2; ctx.setLineDash([8, 10]); ctx.lineDashOffset = -sim.t * 200;
+      ctx.beginPath(); ctx.moveTo(x, FLOOR); ctx.lineTo(x, H); ctx.stroke(); ctx.setLineDash([]);
+    }
+    ctx.fillStyle = '#4b5560'; ctx.fillRect(x - 12, FLOOR - 2, 24, 4);
+    ctx.translate(x, wheelY); ctx.rotate(sim.drain ? Math.PI / 4 : 0);
+    ctx.strokeStyle = sim.drain ? '#23855a' : '#c8432f'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(0, 0, 13, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-13, 0); ctx.lineTo(13, 0); ctx.moveTo(0, -13); ctx.lineTo(0, 13); ctx.stroke();
+    ctx.restore();
+  }
+  function drawRod() {
+    const r = blockRect(), cx = r.x + r.w / 2;
+    ctx.save();
+    ctx.fillStyle = '#6f7a86'; ctx.fillRect(cx - 4, 0, 8, r.y + 2);
+    ctx.fillStyle = '#4b5560'; rr(cx - 16, r.y - 8, 32, 10, 3); ctx.fill();
+    ctx.restore();
+  }
+
+  // ---------- force arrows ----------
+  const placed = [];
+  let forceScale = 2, legendN = 20;   // pixels per newton; newtons shown by the 40-px legend bar
+  function pickScale() {
+    const Fref = Math.max(weight(), Math.pow(sim.s, 3) / 1000 * G);  // biggest force this block can feel
+    const raw = 40 * Fref / 110;                                       // longest arrow about 110 px or less
+    const p = Math.pow(10, Math.floor(Math.log10(raw)));
+    const f = raw / p;
+    legendN = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+    forceScale = 40 / legendN;
+  }
+  function arrow(x, y0, newtons, dir, color) {
+    const len = newtons * forceScale;
+    if (len < 1.5) return null;
+    const head = Math.min(14, len * 0.7 + 3), y1 = y0 + dir * len, yb = y1 - dir * head;
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 10;
+    ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, yb); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - 10, yb); ctx.lineTo(x, y1); ctx.lineTo(x + 10, yb); ctx.closePath(); ctx.lineWidth = 4; ctx.stroke();
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, yb); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x - 10, yb); ctx.lineTo(x, y1); ctx.lineTo(x + 10, yb); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    return { x, y: y1 };
+  }
+  function label(tip, text, color, side, dir, gap, altRight) {
+    if (!tip) return;
+    ctx.save();
+    ctx.font = `800 ${12.5 * UI}px ${FONT}`;
+    const w = ctx.measureText(text).width + 14, h = 22 * UI;
+    const xs = [side > 0 ? tip.x + gap : side < 0 ? tip.x - gap - w : tip.x - w / 2];
+    if (altRight !== undefined) xs.push(altRight - w);
+    const y0 = tip.y - h / 2 - dir * 4;
+    const clampX = v => Math.max(4, Math.min(W - w - 4, v));
+    const clampY = v => Math.max(4, Math.min(H - h - 4, v));
+    const free = (x, y) => !placed.some(p => x < p.x + p.w && x + w > p.x && y < p.y + p.h && y + h > p.y);
+    let x = clampX(xs[0]), y = clampY(y0), found = false;
+    for (const n of [0, 1, -1, 2, -2, 3, -3, 4]) {
+      for (const cx0 of xs) {
+        const tx = clampX(cx0), ty = clampY(y0 + n * (h + 3) * (dir < 0 ? 1 : -1));
+        if (free(tx, ty)) { x = tx; y = ty; found = true; break; }
+      }
+      if (found) break;
+    }
+    placed.push({ x, y, w, h });
+    rr(x, y, w, h, 7);
+    ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = color; ctx.stroke();
+    ctx.fillStyle = color; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, x + 7, y + h / 2 + 1);
+    ctx.restore();
+  }
+  function drawLegend() {
+    ctx.save();
+    ctx.font = `800 ${11 * UI}px ${FONT}`;
+    const txt = `= ${num(legendN)} N`, tw = ctx.measureText(txt).width;
+    const x0 = W - tw - 56, y = 34 * UI;
+    ctx.fillStyle = 'rgba(31,42,55,0.65)'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('Arrow scale', x0, y - 15 * UI);
+    ctx.fillStyle = '#1f2a37'; ctx.fillRect(x0, y - 3, 40, 6);
+    ctx.fillText(txt, x0 + 46, y);
+    placed.push({ x: x0 - 4, y: y - 24 * UI, w: tw + 52, h: 32 * UI });
+    ctx.restore();
+  }
+  function drawForces() {
+    placed.length = 0;
+    if (INV[cur].noForces) return;        // no arrows in this investigation: keep attention on the water
+    pickScale();
+    drawLegend();
+    if (sim.mode === 'slider') {
+      const g = SPIGOT(), d = DRAIN();
+      placed.push({ x: 0, y: g.pipeY - 30, w: g.nozzleX + 20, h: 74 }, { x: d.x - 22, y: d.wheelY - 20, w: 44, h: 40 });
+    }
+    const r = blockRect(), cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+    const Fg = weight(), Fb = buoyant();
+    const off = Math.max(16, r.w * 0.3);
+    const tg = arrow(cx, cy, Fg, 1, '#c8432f');
+    const tb = arrow(cx, cy, Fb, -1, '#1d67c9');
+    // the third force: a hand, the rod, or the tank floor
+    let third = null, thirdText = '', thirdColor = '#7c46c9';
+    const support = Fg - Fb;                         // what has to hold the block still
+    if (Math.abs(support) * forceScale >= 1.5) {
+      if (sim.mode === 'drop' && (sim.held || sim.dragging)) {
+        third = arrow(cx - off, cy, Math.abs(support), support > 0 ? -1 : 1, thirdColor);
+        thirdText = `${support > 0 ? 'Your hand holds up' : 'Your hand pushes down'} ${fN(Math.abs(support))}`;
+      } else if (sim.mode === 'held') {
+        third = arrow(cx - off, cy, Math.abs(support), support > 0 ? -1 : 1, thirdColor);
+        thirdText = `${support > 0 ? 'Rod holds up' : 'Rod pushes down'} ${fN(Math.abs(support))}`;
+      } else if (sim.yb <= 1e-4 && support > 0) {
+        thirdColor = '#1f7a4c';
+        third = arrow(cx + off, cy, support, -1, thirdColor);
+        thirdText = `Floor pushes up ${fN(support)}`;
+      }
+    }
+    if (r.w >= 12) { ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2); ctx.fillStyle = '#1f2a37'; ctx.fill(); }
+    const gap = off + 20, leftEdge = cx - off - 20;
+    label(tb, `Buoyant force ${fN(Fb)}`, '#1d67c9', 1, -1, gap, leftEdge);
+    label(tg, `Gravity ${fN(Fg)}`, '#c8432f', 1, 1, gap, leftEdge);
+    if (third) {
+      const toLeft = thirdColor === '#7c46c9';
+      label(third, thirdText, thirdColor, toLeft ? -1 : 1, support > 0 ? -1 : 1, 20, toLeft ? undefined : leftEdge);
+    }
+  }
+  function drawDepthMarker() {
+    const r = blockRect(), depth = sim.h - sim.yb;
+    if (depth <= 0.05) return;
+    const x = Math.min(r.x + r.w + 14, xPx(TW) - 70), y0 = yPx(sim.h), y1 = yPx(sim.yb);
+    ctx.save(); ctx.strokeStyle = '#1f2a37'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke();
+    [[y0, 1], [y1, -1]].forEach(([y, d]) => { ctx.beginPath(); ctx.moveTo(x - 5, y + d * 7); ctx.lineTo(x, y); ctx.lineTo(x + 5, y + d * 7); ctx.stroke(); });
+    ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(r.x, y1); ctx.lineTo(x, y1); ctx.stroke();
+    ctx.restore();
+    label({ x, y: (y0 + y1) / 2 }, `${one(depth)} cm deep`, '#1f2a37', 1, 0, 8);
+  }
+  function drawRiseGuides() {
+    if (INV[cur].id !== 'displace') return;
+    const start = sim.Vw / AREA, y0 = yPx(start), left = xPx(0), right = xPx(TW);
+    const vNow = sim.sub >= sim.s - 1e-9 ? sim.vol : sim.s * sim.s * sim.sub;
+    ctx.save();
+    // the box between the starting level and the new level
+    if (vNow > 0.5) {
+      const y1 = yPx(sim.h);
+    }
+    // dashed line at the starting level
+    ctx.setLineDash([9, 6]); ctx.strokeStyle = '#1f2a37'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(left, y0); ctx.lineTo(right, y0); ctx.stroke();
+    ctx.restore();
+    label({ x: left + 6, y: y0 + 13 * UI }, `Start: ${num(sim.Vw / 1000)} L`, '#1f2a37', 1, 0, 0);
+    if (sim.mystery) return;             // in the puzzle, she reads the tank herself
+    if (vNow > 0.5) label({ x: right - 4, y: (yPx(sim.h) + y0) / 2 }, `Water rose ${num(vNow / 1000)} L`, '#b06d00', -1, 0, 0);
+    // the block's own volume, written on the block
+    const r = blockRect();
+    if (r.w >= 40) {
+      ctx.save();
+      ctx.font = `900 ${Math.min(16 * UI, r.w / 3.2)}px ${FONT}`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      const t = `${num(sim.vol / 1000)} L`, tx = r.x + Math.max(r.w * 0.22, ctx.measureText(t).width / 2 + 6), ty = r.y + r.h - Math.min(r.h * 0.2, 16 * UI);
+      ctx.strokeText(t, tx, ty);
+      ctx.fillStyle = '#1f2a37'; ctx.fillText(t, tx, ty);
+      ctx.restore();
+    }
+  }
+  function drawDragHint() {
+    if (sim.mode !== 'drop' || !sim.held || sim.dragging || prog[cur].stage === 'predict' || prog[cur].rows.length) return;
+    const r = blockRect();
+    ctx.save();
+    ctx.setLineDash([6, 5]); ctx.strokeStyle = 'rgba(231,150,43,0.95)'; ctx.lineWidth = 2;
+    rr(r.x - 6, r.y - 6, r.w + 12, r.h + 12, 8); ctx.stroke();
+    ctx.restore();
+    label({ x: xPx(TW / 2), y: yPx(TH) + 22 * UI }, pushUnder() ? 'Push the block all the way underwater, then let go' : 'Drag the block into the water and let go', '#b86b0c', 0, 0, 0);
+  }
+  function drawMessage() {
+    if (!(sim.msgT > 0)) return;
+    ctx.save(); ctx.globalAlpha = Math.min(1, sim.msgT * 2);
+    label({ x: xPx(TW / 2), y: yPx(TH) - 8 * UI }, sim.msg, '#b86b0c', 0, 0, 0);
+    ctx.restore();
+  }
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    drawBackground(); drawTankBack(); drawScales();
+    drawWater();
+    if (sim.mode === 'held') drawRod();
+    if (sim.mode === 'slider') drawSpigot();
+    drawBlock(); drawBlockTint();
+    drawTankWalls();
+    if (sim.mode === 'slider') drawDrain();
+    drawForces();
+    if (sim.mode === 'held') drawDepthMarker();
+    if (blockRect().w < 24) { drawBlock(); drawBlockTint(); }   // keep a speck-sized block visible above its arrows
+    drawTinyRing();
+    drawRiseGuides();
+    drawDragHint();
+    drawMessage();
+  }
+
+  // =====================================================================
+  //  CONTROLS + LIVE READINGS (beside the tank)
+  // =====================================================================
+  const readingsEl = document.getElementById('readings');
+  const controlsEl = document.getElementById('controls');
+  function readingsHTML() {
+    const inv = INV[cur];
+    if (inv.id === 'displace') return `<div class="reading"><span class="k">Water reading</span><span class="v" id="rv1">—</span></div>`;
+    if (inv.control === 'weightMat') return `<div class="reading"><span class="k">Underwater</span><span class="v" id="rv1">—</span></div><div class="reading"><span class="k">Weight</span><span class="v" id="rv2">—</span></div><div class="reading blue"><span class="k">Buoyant force</span><span class="v" id="rv3">—</span></div>`;
+    if (inv.control === 'mass') return `<div class="reading"><span class="k">Result</span><span class="v" id="rv1">—</span></div><div class="reading"><span class="k">Weight</span><span class="v" id="rv2">—</span></div><div class="reading blue"><span class="k">Buoyant force</span><span class="v" id="rv3">—</span></div>`;
+    if (inv.mode === 'drop') return `<div class="reading"><span class="k">Result</span><span class="v" id="rv1">—</span></div>`;
+    if (inv.mode === 'held') return `<div class="reading"><span class="k">Depth of block’s bottom</span><span class="v" id="rv1">—</span></div><div class="reading"><span class="k">Underwater</span><span class="v" id="rv2">—</span></div><div class="reading blue"><span class="k">Buoyant force</span><span class="v" id="rv3">—</span></div>`;
+    return `<div class="reading"><span class="k">Water depth</span><span class="v" id="rv1">—</span></div><div class="reading"><span class="k">Block underwater</span><span class="v" id="rv2">—</span></div><div class="reading blue"><span class="k">Buoyant force</span><span class="v" id="rv3">—</span></div>`;
+  }
+  function updateReadings() {
+    const inv = INV[cur];
+    const set = (id, t) => { const e = document.getElementById(id); if (e && e.textContent !== t) e.textContent = t; };
+    if (inv.id === 'displace') {
+      set('rv1', `${num((sim.Vw + (sim.sub >= sim.s - 1e-9 ? sim.vol : sim.s * sim.s * sim.sub)) / 1000)} L`);
+    } else if (inv.control === 'weightMat') {
+      set('rv1', underText(sim.sub / sim.s)); set('rv2', fN(weight())); set('rv3', fN(buoyant()));
+    } else if (inv.mode === 'drop') {
+      let t = 'Not in the water yet';
+      if (!sim.held && sim.recorded) t = sim.yb > 1e-4 && sim.sub < sim.s ? `Floats (${Math.round(sim.sub / sim.s * 100)}% under)` : 'Sinks';
+      else if (sim.sub > 0) t = 'In the water…';
+      set('rv1', t);
+      if (inv.control === 'mass') { set('rv2', fN(weight())); set('rv3', fN(buoyant())); }
+    } else if (inv.mode === 'held') {
+      const d = sim.h - sim.yb;
+      set('rv1', d <= 0 ? 'above water' : `${one(d)} cm`);
+      set('rv2', underText(sim.sub / sim.s));
+      set('rv3', `${one(buoyant())} N`);
+    } else {
+      set('rv1', `${one(sim.h)} cm`);
+      set('rv2', underText(sim.sub / sim.s));
+      set('rv3', `${one(buoyant())} N`);
+    }
+  }
+  function objInfo() {
+    if (pushUnder()) return `This block: <b>${matName(sim.mat)}</b>, <b>${cm3(Math.pow(sim.s, 3))}</b>, <b>${grams(sim.mass)}</b>, weighs <b>${fN(weight())}</b>`;
+    if (INV[cur].control === 'volume') return `This block: <b>${num(sim.vol / 1000)} L</b>, <b>${num(sim.mass / 1000)} kg</b><br>(a cube ${num(sim.s)} cm on each side)`;
+    if (byMass()) return `This block: <b>${grams(sim.mass)}</b>, weighs <b>${fN(weight())}</b><br>(a cube ${num(sim.s)} cm on each side)`;
+    return `This block: <b>${cm3(Math.pow(sim.s, 3))}</b>, <b>${grams(sim.mass)}</b><br>(a cube ${num(sim.s)} cm on each side)`;
+  }
+  function renderControls() {
+    const inv = INV[cur];
+    readingsEl.innerHTML = readingsHTML();
+    if (inBonus()) {
+      controlsEl.innerHTML = `
+        <div class="objinfo"><b>Mystery rock</b><br>Its volume is a secret. Sink it and read the tank to find out.</div>
+        <div class="rowbtns"><button class="btn" type="button" id="dropBtn">Drop it in</button><button class="btn" type="button" id="outBtn">Take it out</button></div>`;
+      document.getElementById('dropBtn').addEventListener('click', letGo);
+      document.getElementById('outBtn').addEventListener('click', () => { hover(); settle(); });
+      return;
+    }
+    if (inv.control === 'weightMat') {
+      const stops = inv.mats, n = stops.length, idx = Math.max(0, stops.indexOf(sim.mat));
+      const marks = stops.map((k, i) => `<button type="button" class="stop ${i % 2 ? 'low' : ''}" data-stop="${i}" style="left:calc(9px + (100% - 18px) * ${i / (n - 1)})">${MATS[k].name}</button>`).join('');
+      controlsEl.innerHTML = `
+        <div><label class="ctl-label" for="wtSlider">Weight <output id="wtOut">${fN(weight())}</output></label>
+          <input id="wtSlider" type="range" min="0" max="${n - 1}" step="1" value="${idx}" aria-valuetext="${MATS[sim.mat].name}, ${fN(weight())}">
+          <div class="stops" aria-hidden="true">${marks}</div></div>
+        <div class="objinfo" id="objinfo">${objInfo()}</div>
+        <div class="rowbtns"><button class="btn" type="button" id="underBtn">Push it under</button><button class="btn" type="button" id="outBtn">Take it out</button></div>`;
+      const sl = document.getElementById('wtSlider');
+      const pick = i => {
+        sl.value = i;
+        setObject(stops[i], inv.fixedEdge); hover(); settle();
+        document.getElementById('wtOut').textContent = fN(weight());
+        sl.setAttribute('aria-valuetext', `${MATS[stops[i]].name}, ${fN(weight())}`);
+        document.getElementById('objinfo').innerHTML = objInfo();
+        controlsEl.querySelectorAll('.stop').forEach((b, k) => b.classList.toggle('on', k === i));
+      };
+      sl.addEventListener('input', () => pick(+sl.value));
+      controlsEl.querySelectorAll('.stop').forEach(b => b.addEventListener('click', () => pick(+b.dataset.stop)));
+      controlsEl.querySelectorAll('.stop')[idx].classList.add('on');
+      document.getElementById('underBtn').addEventListener('click', () => {
+        if (prog[cur].stage === 'predict') return;
+        const h0 = sim.Vw / AREA;
+        sim.x = TW / 2; sim.yb = Math.max(0, (h0 - sim.s) / 2); settle();
+        letGo();
+      });
+      document.getElementById('outBtn').addEventListener('click', () => { hover(); settle(); });
+    } else if (inv.mode === 'drop') {
+      const matChips = inv.mats.map(k => `<button class="chip" type="button" data-mat="${k}" aria-pressed="${k === sim.mat}"><span class="sw" style="background:${MATS[k].fill}"></span>${MATS[k].name}</button>`).join('');
+      const mm = byMass(), vv = inv.control === 'volume';
+      const list = mm ? MASSES : vv ? VOLS : EDGES;
+      const idx = Math.max(0, list.indexOf(mm ? sim.mass : vv ? sim.vol : sim.edge));
+      const shown = () => mm ? grams(sim.mass) : vv ? `${num(sim.vol / 1000)} L` : cm3(sim.vol);
+      controlsEl.innerHTML = `
+        <div><div class="ctl-label">Material</div><div class="chips">${matChips}</div></div>
+        <div><label class="ctl-label" for="sizeSlider">${mm ? 'Mass' : 'Size'} <output id="sizeOut">${shown()}</output></label>
+          <input id="sizeSlider" type="range" min="0" max="${list.length - 1}" step="1" value="${idx}">
+          <div class="ends"><span>${mm ? 'feather-light' : vv ? 'small' : 'speck'}</span><span>${mm ? 'super heavy' : vv ? 'big' : 'giant'}</span></div></div>
+        <div class="objinfo" id="objinfo">${objInfo()}</div>
+        <div class="rowbtns"><button class="btn" type="button" id="dropBtn">Drop it in</button><button class="btn" type="button" id="outBtn">Take it out</button></div>`;
+      controlsEl.querySelectorAll('[data-mat]').forEach(b => b.addEventListener('click', () => {
+        if (mm) setObjectMass(b.dataset.mat, sim.mass); else if (vv) setObjectVol(b.dataset.mat, sim.vol); else setObject(b.dataset.mat, sim.edge);
+        hover(); settle();
+        controlsEl.querySelectorAll('[data-mat]').forEach(c => c.setAttribute('aria-pressed', String(c === b)));
+        document.getElementById('objinfo').innerHTML = objInfo();
+      }));
+      const sl = document.getElementById('sizeSlider');
+      sl.addEventListener('input', () => {
+        if (mm) { sim.dropMass = MASSES[+sl.value]; setObjectMass(sim.mat, sim.dropMass); }
+        else if (vv) { sim.dropVol = VOLS[+sl.value]; setObjectVol(sim.mat, sim.dropVol); }
+        else { sim.dropEdge = EDGES[+sl.value]; setObject(sim.mat, sim.dropEdge); }
+        hover(); settle();
+        document.getElementById('sizeOut').textContent = shown();
+        sl.setAttribute('aria-valuetext', shown());
+        document.getElementById('objinfo').innerHTML = objInfo();
+      });
+      document.getElementById('dropBtn').addEventListener('click', letGo);
+      document.getElementById('outBtn').addEventListener('click', () => { hover(); settle(); });
+    } else if (inv.mode === 'held') {
+      controlsEl.innerHTML = `
+        <div class="objinfo">Test block: <b>Aluminum</b>, <b>${cm3(Math.pow(sim.s, 3))}</b>, held on a rod. Drag it up and down, or use these buttons:</div>
+        <div class="rowbtns"><button class="btn" type="button" id="lowerBtn">Lower 1 cm</button><button class="btn" type="button" id="raiseBtn">Raise 1 cm</button></div>`;
+      document.getElementById('lowerBtn').addEventListener('click', () => nudgeHeld(-1));
+      document.getElementById('raiseBtn').addEventListener('click', () => nudgeHeld(1));
+    } else {
+      controlsEl.innerHTML = `
+        <div class="rowbtns"><button class="btn tap" type="button" id="spigotBtn" aria-pressed="false">Turn on spigot</button><button class="btn tap" type="button" id="drainBtn" aria-pressed="false">Open drain</button></div>
+        <div class="objinfo">You can also click the spigot handle or the drain wheel in the picture. Each time the water stops moving, a measurement is recorded.</div>
+        <div class="objinfo">Test block: <b>Aluminum</b>, <b>${cm3(Math.pow(sim.s, 3))}</b>, ${sim.s} cm tall, sitting on the bottom.</div>`;
+      document.getElementById('spigotBtn').addEventListener('click', () => { if (canPlay()) setSpigot(!sim.spigot); });
+      document.getElementById('drainBtn').addEventListener('click', () => { if (canPlay()) setDrain(!sim.drain); });
+      setSpigot(sim.spigot); setDrain(sim.drain);
+    }
+  }
+  function setSpigot(on) {
+    sim.spigot = on;
+    const b = document.getElementById('spigotBtn');
+    if (b) { b.setAttribute('aria-pressed', String(on)); b.textContent = on ? 'Turn off spigot' : 'Turn on spigot'; }
+  }
+  function setDrain(on) {
+    sim.drain = on;
+    const b = document.getElementById('drainBtn');
+    if (b) { b.setAttribute('aria-pressed', String(on)); b.textContent = on ? 'Close drain' : 'Open drain'; }
+  }
+  const canPlay = () => prog[cur].stage !== 'predict';
+  function release() {
+    if (sim.mode !== 'drop' || prog[cur].stage === 'predict') return;
+    sim.held = false; sim.dragging = false; sim.v = 0; sim.recorded = false; sim.snapped = false; sim.settledT = 0;
+  }
+  function nudgeHeld(dcm) {
+    if (prog[cur].stage === 'predict') return;
+    sim.yb = Math.max(0, Math.min(MAX_TOP - sim.s, sim.yb + dcm));
+    settle();
+    sim.recordTimer = 0.5;
+  }
+
+  // =====================================================================
+  //  PANEL CARD (predict → test → conclude)
+  // =====================================================================
+  const card = document.getElementById('card');
+  const lockEl = document.getElementById('lock');
+  function stepsHTML(stage) {
+    const order = ['predict', 'explore', 'conclude'], names = ['1 · Predict', '2 · Test', '3 · Conclude'];
+    const i = stage === 'done' ? 3 : order.indexOf(stage);
+    return `<div class="steps">${names.map((n, k) => `<div class="step ${k < i ? 'past' : k === i ? 'now' : ''}">${n}</div>`).join('')}</div>`;
+  }
+  function choicesHTML(inv, name, selected) {
+    return `<fieldset class="choices" aria-label="${name === 'pred' ? 'Your prediction' : 'Your conclusion'}">${inv.options.map(o => `
+      <label class="choice"><input type="radio" name="${name}" value="${o.id}" ${selected === o.id ? 'checked' : ''}><span>${o.text}</span></label>`).join('')}</fieldset>`;
+  }
+  const optText = (inv, id) => (inv.options.find(o => o.id === id) || {}).text || '';
+
+  function renderCard() {
+    const inv = INV[cur], p = prog[cur];
+    lockEl.classList.toggle('on', p.stage === 'predict');
+    if (inBonus()) {
+      const b = p.bonus;
+      lockEl.classList.remove('on');
+      let h = `<h2>Bonus puzzle: the mystery rock</h2>
+        <p>Can you figure out the volume of this rock? Drag it all the way underwater, then read the tank. The water starts at 20 L.</p>
+        <p class="lead">What is the rock’s volume?</p>
+        <div class="rowbtns answers">${[1, 2, 3, 4, 5].map(n => `<button class="btn ans ${b.answer === n ? (b.solved ? 'right' : 'wrong') : ''}" type="button" data-ans="${n}">${n} L</button>`).join('')}</div>`;
+      if (b.solved) h += `<div class="fb yes"><strong>Yes! </strong>The water went from 20 L to ${20 + b.vol / 1000} L, so it rose ${b.vol / 1000} L. That means the rock’s volume is ${b.vol / 1000} L. You measured something lumpy without a ruler!</div>
+        <div class="rowbtns"><button class="btn primary" id="anotherBtn">Try another rock</button><button class="btn" id="bonusBackBtn">Back to my results</button></div>`;
+      else if (b.answer) h += `<div class="fb no"><strong>Not quite. </strong>${b.hint}</div><div class="rowbtns"><button class="btn" id="bonusBackBtn">Back to my results</button></div>`;
+      else h += `<div class="rowbtns"><button class="btn" id="bonusBackBtn">Back to my results</button></div>`;
+      card.innerHTML = h;
+      card.querySelectorAll('[data-ans]').forEach(btn => btn.addEventListener('click', () => {
+        const n = +btn.dataset.ans;
+        b.answer = n;
+        b.solved = n * 1000 === b.vol && sim.sub >= sim.s - 1e-6;
+        if (!b.solved) {
+          const under = sim.sub >= sim.s - 1e-6;
+          b.hint = !under ? 'Sink the rock all the way underwater first, then look at the water.'
+            : 'Look at where the water is now, compared to the dashed line at 20 L. How many liters did it go up?';
+        }
+        renderCard();
+      }));
+      const on = (id, fn) => { const e = document.getElementById(id); if (e) e.addEventListener('click', fn); };
+      on('anotherBtn', () => { newPuzzle(); setupBonusRock(); renderCard(); });
+      on('bonusBackBtn', () => { p.bonus = null; setupInvestigation(); renderAll(); });
+      renderTabs();
+      return;
+    }
+    let h = partsHTML() + stepsHTML(p.stage);
+    if (p.stage === 'predict') {
+      h += `<h2>${inv.question}</h2><p class="lead">Make a prediction. What do you think will happen?</p>
+        ${choicesHTML(inv, 'pred', p.pick)}
+        <button class="btn primary" id="lockBtn" ${p.pick ? '' : 'disabled'}>Lock in my prediction</button>`;
+    } else if (p.stage === 'explore' || p.stage === 'conclude') {
+      h += `<div class="mine"><span>Your prediction</span>${optText(inv, p.prediction)}</div>`;
+      if (p.stage === 'explore') {
+        h += `<p class="how">${inv.how}</p>`;
+        if (inv.densityUnlockAt && !p.density && p.rows.length >= inv.densityUnlockAt) {
+          h += `<div class="hint"><p>Here’s a trick scientists use: divide each block’s mass by its volume. It tells you how heavy the block is for its size.</p><button class="btn" id="densBtn">Add a mass ÷ volume column</button></div>`;
+        }
+        const miss = inv.need(p.rows);
+        if (miss.length) h += `<div class="need">Before you make a conclusion, ${miss.join(', and ')}.</div>`;
+        else h += `<p><b>You have enough data to make a conclusion.</b> You can keep testing too.</p><button class="btn primary" id="readyBtn">I’m ready to make a conclusion</button>`;
+      } else {
+        h += `<h2>${inv.question}</h2><p class="lead">Look at your data. What’s your conclusion?</p>`;
+        if (p.fb) h += `<div class="fb no"><strong>Hmm, check your data. </strong>${p.fb}</div>`;
+        h += choicesHTML(inv, 'conc', p.pick);
+        h += `<div class="rowbtns"><button class="btn primary" id="checkBtn" ${p.pick ? '' : 'disabled'}>Check my conclusion</button><button class="btn" id="backBtn">Keep testing</button></div>`;
+      }
+    } else if (p.stage === 'done') {
+      const same = p.prediction === inv.correct;
+      h += `<div class="fb yes"><strong>Your conclusion fits your data.</strong></div>
+        <div class="compare">
+          <div><span>Your prediction</span>${optText(inv, p.prediction)}</div>
+          <div><span>Your conclusion</span>${optText(inv, p.conclusion)}</div>
+        </div>
+        <p>${same ? 'Your prediction was right, and now you have evidence to back it up.' : 'Your thinking changed because of what you found. That’s exactly how scientists work: they test their ideas and change their minds when the evidence says so.'}</p>
+        <div class="bigidea"><span>Big idea</span>${inv.idea}</div>
+        ${inv.bonus ? '<div class="hint"><p>Ready for a challenge?</p><button class="btn primary" id="bonusBtn">Try a bonus puzzle</button></div>' : ''}
+        <div class="rowbtns">${cur < INV.length - 1 ? `<button class="btn go" id="nextBtn">${INV[cur + 1].group === inv.group ? `Next: ${INV[cur + 1].part.replace(/:.*/, '')} →` : 'Next investigation →'}</button>` : ''}<button class="btn" id="restartBtn">Start this one over</button></div>`;
+    }
+    card.innerHTML = h;
+    wireCard();
+    renderTabs();
+  }
+  function wireCard() {
+    const p = prog[cur], inv = INV[cur];
+    card.querySelectorAll('input[type=radio]').forEach(r => r.addEventListener('change', () => {
+      p.pick = r.value;
+      const b = document.getElementById('lockBtn') || document.getElementById('checkBtn');
+      if (b) b.disabled = false;
+    }));
+    const on = (id, fn) => { const e = document.getElementById(id); if (e) e.addEventListener('click', fn); };
+    on('lockBtn', () => { p.prediction = p.pick; p.pick = null; p.stage = 'explore'; renderCard(); renderTable(); });
+    on('densBtn', () => { p.density = true; renderTable(); renderCard(); });
+    on('readyBtn', () => { p.stage = 'conclude'; p.pick = null; p.fb = null; renderCard(); });
+    on('backBtn', () => { p.stage = 'explore'; p.fb = null; p.hl = []; renderTable(); renderCard(); });
+    on('checkBtn', () => {
+      p.tries++;
+      if (p.pick === inv.correct) {
+        p.conclusion = p.pick; p.stage = 'done'; p.fb = null; p.hl = [];
+        if (inv.densityUnlockAt) p.density = true;
+      } else {
+        const f = inv.feedback(p.pick, p.rows);
+        p.fb = f.msg; p.hl = f.rows || [];
+        if (f.unlock) p.density = true;
+        p.pick = null;
+      }
+      renderTable(); renderCard();
+      if (p.hl.length) {
+        const tr = document.querySelector(`#tables tr[data-i="${p.hl[0]}"]`);
+        if (tr) tr.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    });
+    on('nextBtn', () => switchTo(cur + 1));
+    card.querySelectorAll('[data-part]').forEach(b => b.addEventListener('click', () => { if (+b.dataset.part !== cur) switchTo(+b.dataset.part); }));
+    on('restartBtn', () => { prog[cur] = fresh(); setupInvestigation(); renderAll(); });
+    on('bonusBtn', () => { newPuzzle(); setupInvestigation(); renderAll(); });
+  }
+
+  // =====================================================================
+  //  DATA TABLES
+  // =====================================================================
+  const tablesEl = document.getElementById('tables'), emptyEl = document.getElementById('empty'), noteEl = document.getElementById('tablenote');
+  function tableHTML(cols, items, p, flashIndex) {
+    return `<div class="table-wrap"><table><thead><tr><th>#</th>${cols.map(c => `<th class="${c.num ? 'num' : ''} ${c.density ? 'new' : ''}">${c.label}</th>`).join('')}</tr></thead>
+      <tbody>${items.map(({ r, i }, k) => `<tr data-i="${i}" class="${p.hl.includes(i) ? 'hl' : ''} ${i === flashIndex ? 'flash' : ''}"><td class="idx">${k + 1}</td>${cols.map(c => `<td class="${c.num ? 'num' : ''} ${c.density ? 'new' : ''}">${c.html ? c.get(r) : esc(c.get(r))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  }
+  function renderTable(flashIndex) {
+    const inv = INV[cur], p = prog[cur];
+    const cols = inv.columns.filter(c => !c.density || p.density);
+    const items = p.rows.map((r, i) => ({ r, i }));
+    if (!p.rows.length) tablesEl.innerHTML = '';
+    else if (inv.groupByMat) {
+      const order = [];
+      items.forEach(it => { if (!order.includes(it.r.mat)) order.push(it.r.mat); });
+      tablesEl.innerHTML = order.map(m => {
+        const mine = items.filter(it => it.r.mat === m).sort((a, b) => a.r.vol - b.r.vol);
+        return `<div><h3><span class="sw" style="background:${MATS[m].fill}"></span>${MATS[m].name}</h3>${tableHTML(cols, mine, p, flashIndex)}</div>`;
+      }).join('');
+    } else if (inv.groups) {
+      tablesEl.innerHTML = inv.groups.map(g => {
+        const mine = items.filter(it => g.test(it.r)).sort((a, b) => inv.sortBy(a.r) - inv.sortBy(b.r));
+        return `<div><h3>${g.title}</h3>${mine.length ? tableHTML(cols, mine, p, flashIndex) : '<p class="empty">Nothing here yet.</p>'}</div>`;
+      }).join('');
+    } else tablesEl.innerHTML = tableHTML(cols, displayOrder().map(i => items[i]), p, flashIndex);
+    emptyEl.style.display = p.rows.length ? 'none' : 'block';
+    emptyEl.textContent = p.stage === 'predict' ? 'Make a prediction to start collecting data.' : 'No measurements yet. Your results will show up here.';
+    noteEl.textContent = inv.id === 'displace' ? 'The water reading is how much space the water takes up, including anything sunk in it.'
+      : inv.groupByMat ? 'Each material gets its own table, sorted from smallest to biggest.' : '';
+    if (flashIndex !== undefined) {
+      const tr = tablesEl.querySelector(`tr[data-i="${flashIndex}"]`);
+      if (tr) tr.scrollIntoView({ block: 'nearest' });
+    }
+  }
+  function flashRow(i) {
+    const tr = tablesEl.querySelector(`tr[data-i="${i}"]`);
+    if (!tr) return;
+    tr.classList.remove('flash'); void tr.offsetWidth; tr.classList.add('flash');
+    tr.scrollIntoView({ block: 'nearest' });
+  }
+
+  // =====================================================================
+  //  TABS
+  // =====================================================================
+  const tabsEl = document.getElementById('tabs');
+  const partsOf = g => INV.map((d, i) => d.group === g ? i : -1).filter(i => i >= 0);
+  const groupDone = g => partsOf(g).every(i => prog[i].stage === 'done');
+  function renderTabs() {
+    tabsEl.style.setProperty('--ntabs', GROUPS.length);
+    tabsEl.innerHTML = GROUPS.map((g, k) => {
+      const first = INV[partsOf(g)[0]], done = groupDone(g);
+      return `<button class="tab ${done ? 'done' : ''}" type="button" data-g="${g}" aria-current="${INV[cur].group === g}">
+      <span class="n">${done ? '✓' : k + 1}</span><span><span class="t">${first.tab}</span><span class="s">${first.sub}</span></span></button>`;
+    }).join('');
+    tabsEl.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => {
+      const parts = partsOf(b.dataset.g);
+      if (parts.includes(cur)) return;
+      switchTo(parts.find(i => prog[i].stage !== 'done') ?? parts[0]);
+    }));
+    const n = GROUPS.filter(groupDone).length;
+    document.getElementById('progress').textContent = `${n} of ${GROUPS.length} investigations finished`;
+  }
+  function partsHTML() {
+    const parts = partsOf(INV[cur].group);
+    if (parts.length < 2) return '';
+    return `<div class="parts">${parts.map(i => `<button class="part ${prog[i].stage === 'done' ? 'done' : ''}" type="button" data-part="${i}" aria-current="${i === cur}">${prog[i].stage === 'done' ? '✓ ' : ''}${INV[i].part}</button>`).join('')}</div>`;
+  }
+  function switchTo(i) {
+    cur = i;
+    setupInvestigation();
+    renderAll();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function renderAll() { renderTabs(); renderControls(); renderCard(); renderTable(); }
+
+  // =====================================================================
+  //  POINTER + KEYBOARD
+  // =====================================================================
+  function toScene(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height };
+  }
+  function overBlock(p) {
+    const r = blockRect();
+    const cssW = canvas.getBoundingClientRect().width || W;
+    const pad = Math.max(8, (44 * W / cssW - r.w) / 2);
+    return p.x >= r.x - pad && p.x <= r.x + r.w + pad && p.y >= r.y - pad && p.y <= r.y + r.h + pad;
+  }
+  function clampPos() {
+    const s = sim.s;
+    sim.x = Math.max(s / 2, Math.min(TW - s / 2, sim.x));
+    sim.yb = Math.max(0, Math.min(MAX_TOP - s, sim.yb));
+  }
+  const onSpigot = p => { const g = SPIGOT(); return p.x < g.nozzleX + 16 && p.y > g.pipeY - 34 && p.y < g.pipeY + 44; };
+  const onDrain = p => { const d = DRAIN(); return Math.hypot(p.x - d.x, p.y - d.wheelY) < 26; };
+  canvas.addEventListener('pointerdown', e => {
+    if (prog[cur].stage === 'predict') return;
+    const p = toScene(e);
+    if (sim.mode === 'slider') {
+      if (onSpigot(p)) setSpigot(!sim.spigot);
+      else if (onDrain(p)) setDrain(!sim.drain);
+      return;
+    }
+    if (!overBlock(p)) return;
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+    sim.dragging = true; sim.held = true; sim.v = 0; sim.snapped = false; sim.recordTimer = 0;
+    sim.offX = sim.x - (p.x - TX) / PX;
+    sim.offY = sim.yb - (FLOOR - p.y) / PX;
+    canvas.style.cursor = 'grabbing';
+  });
+  canvas.addEventListener('pointermove', e => {
+    const p = toScene(e);
+    if (sim.dragging) {
+      if (sim.mode === 'drop') sim.x = (p.x - TX) / PX + sim.offX;
+      sim.yb = (FLOOR - p.y) / PX + sim.offY;
+      clampPos(); settle();
+    } else {
+      const play = prog[cur].stage !== 'predict';
+      canvas.style.cursor = play && sim.mode === 'slider' && (onSpigot(p) || onDrain(p)) ? 'pointer'
+        : play && sim.mode !== 'slider' && overBlock(p) ? 'grab' : 'default';
+    }
+  });
+  function endDrag(e) {
+    if (!sim.dragging) return;
+    sim.dragging = false;
+    try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+    canvas.style.cursor = 'grab';
+    if (sim.mode === 'drop') letGo();
+    else if (sim.mode === 'held') { sim.yb = Math.round(sim.yb * 2) / 2; clampPos(); settle(); sim.recordTimer = 0.25; }
+  }
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+  canvas.addEventListener('keydown', e => {
+    if (prog[cur].stage === 'predict' || sim.mode === 'slider') return;
+    if (sim.mode === 'held' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault(); nudgeHeld(e.key === 'ArrowUp' ? 1 : -1);
+    } else if (sim.mode === 'drop') {
+      const mv = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[e.key];
+      if (mv) { e.preventDefault(); sim.held = true; sim.x += mv[0]; sim.yb += mv[1]; clampPos(); settle(); }
+      else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); letGo(); }
+    }
+  });
+
+  // =====================================================================
+  //  SIZING + LOOP
+  // =====================================================================
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    const cssW = canvas.clientWidth || W;
+    canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssW * dpr * H / W);
+    ctx.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
+    UI = Math.min(1.8, Math.max(1, 0.8 / (cssW / W)));
+  }
+  if ('ResizeObserver' in window) new ResizeObserver(resize).observe(canvas);
+  window.addEventListener('resize', resize);
+  resize();
+
+  setupInvestigation();
+  renderAll();
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.033, Math.max(0, (now - last) / 1000));
+    last = now;
+    update(dt); draw(); updateReadings();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // exposed only for automated testing
+  window.__bx = { sim, prog, INV, EDGES, MASSES, get cur() { return cur; }, release, setObject, hover, settle, switchTo };
+})();
+</script>
+</body>
+</html>
