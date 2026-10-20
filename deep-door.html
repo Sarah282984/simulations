@@ -225,7 +225,7 @@
       <dl class="gauge">
         <dt>Depth</dt><dd id="gDepth">0 m</dd>
         <dt>Pressure</dt><dd id="gP">1 atm</dd>
-        <dt></dt><dd id="gPsi" class="spec">14.7 psi</dd>
+        <dt></dt><dd id="gPa" class="spec">101,325 Pa</dd>
       </dl>
     </aside>
   </div>
@@ -263,7 +263,7 @@
         <li><b>Crumpling (buckling).</b> Thin shells can fold inward before the material itself is crushed. Sphere: classical shell formula, multiplied by 0.25 because real spheres buckle at a fraction of the textbook value. Capsule: the Windenburg–Trilling formula for tubes under outside pressure, times 0.8. These are approximate.</li>
         <li><b>Flat walls</b> (prisms and the box) bend. Side walls use the standard clamped-plate formula (Roark), and the flat ends are treated as clamped plates too. Bending squeezes one face of the wall and stretches the other, which is why glass and granite crack: they are very strong squeezed and weak stretched. The flat-wall numbers are the roughest part of the model.</li>
         <li><b>Materials</b> (approximate): steel 450 MPa, brass 250 MPa, glass 700 MPa squeezed / 40 MPa stretched, granite 180 / 10 MPa, oak 40 / 20 MPa. Chocolate is the joke material, with rough guesses: 1.3 tonnes per m³ (so it sinks), 8 MPa squeezed, 2 MPa stretched. It can't survive the deep sea at any size. As a check, the model puts a real 17-inch deep-sea glass float sphere (14 mm wall, rated for 6,700 m) at about 8,350 m before it fails, a plausible margin above its rating.</li>
-        <li><b>Supplies.</b> Steel is limited to 2,000 kg. A steel design that needs more than that can't be built, so it can't go in the tank or the sea. There is plenty of every other material.</li>
+        <li><b>Supplies.</b> Steel is limited to 3,000 kg. A steel design that needs more than that can't be built, so it can't go in the tank or the sea. There is plenty of every other material.</li>
         <li><b>Ballast</b> is lead, added 100 kg at a time (up to 3,000 kg). It adds weight without changing the outside shape, so it doesn't add lift. It takes up a little room inside (100 kg of lead is about 9 litres).</li>
         <li><b>Weight and lift.</b> Lift is the weight of the water the whole outside shape pushes aside. Weight is the hull plus 150 kg for Elise, Edmond and their gear, plus any ballast, plus the air inside. The motor can push about 300 kg up or down, so the difference has to stay within ±300 kg to dive and return.</li>
       </ul>
@@ -273,9 +273,9 @@
 
 <script>
 /* ================= PHYSICS ================= */
-const ATM = 101325, G = 9.81, RHO_W = ATM / (G * 10), PSI = 14.696;
+const ATM = 101325, G = 9.81, RHO_W = ATM / (G * 10);
 const DOOR = 2000, CREW_KG = 150, PROP_KG = 300, ROOM_M3 = 1.0, TANK_MAX = 250, LEAD_RHO = 11340, BALLAST_STEP = 100, BALLAST_MAX = 3000;
-const SUPPLY = { steel:2000 };   // kg; materials not listed are unlimited
+const SUPPLY = { steel:3000 };   // kg; materials not listed are unlimited
 const MATERIALS = {
   brass:   { name:'Brass',   rho:8500, E:100e9, nu:0.34, comp:250e6, tens:250e6, ductile:true,  color:'#cfa042', note:'Bends before it breaks.' },
   glass:   { name:'Glass',   rho:2230, E:64e9,  nu:0.20, comp:700e6, tens:40e6, ductile:false, color:'#9fd3e4', note:'Cracks instead of bending.' },
@@ -369,8 +369,8 @@ const design = () => ({ mat:state.mat, shape:state.shape, n:state.n, D:state.D, 
 const $ = id => document.getElementById(id);
 const fmt = (x,dp=0) => Number(x).toLocaleString('en-US',{minimumFractionDigits:dp,maximumFractionDigits:dp});
 const sig = x => { const a=Math.abs(x); return a>=100?fmt(x):a>=10?fmt(x,1):a>=1?fmt(x,2):fmt(x,3); };
-const atmTxt = p => `${fmt(p, p<10&&p%1?1:0)} atm`;
-const psiTxt = p => `${fmt(p*PSI)} psi`;
+const atmTxt = p => `${fmt(p, Math.abs(p-Math.round(p))>1e-9 ? 1 : 0)} atm`;
+const paTxt = p => `${fmt(p*ATM)} Pa`;
 const maxKnown = () => state.tests.filter(r=>r.kind==='sea').reduce((m,r)=>Math.max(m,r.depth),0);
 const shapeLabel = r => r.shape==='prism' ? `Prism (${r.n} sides)` : SHAPES[r.shape];
 
@@ -438,8 +438,8 @@ function render(){
   $('ballOut').textContent = `${fmt(state.ballast)} kg`;
   $('ballAdd').disabled = diving || state.ballast>=BALLAST_MAX; $('ballRem').disabled = diving || state.ballast<=0;
   $('airOut').textContent = state.pin===0 ? '0 atm (empty)' : atmTxt(state.pin);
-  $('tankOut').textContent = `${atmTxt(state.tank)} · ${psiTxt(state.tank)}`;
-  if (state.pin!==0) $('airOut').textContent += ` · ${psiTxt(state.pin)}`;
+  $('tankOut').textContent = `${atmTxt(state.tank)} · ${paTxt(state.tank)}`;
+  if (state.pin!==0) $('airOut').textContent += ` · ${paTxt(state.pin)}`;
 
   // checks
   const roomOK = w.ok && w.room>=ROOM_M3;
@@ -541,11 +541,12 @@ function surfaces(d){
   const n=d.n, prism=(r,L)=>n*2*r*Math.sin(Math.PI/n)*L + 2*(n/2*r*r*Math.sin(2*Math.PI/n));
   return { Ao:prism(R,d.D), Ai:g.ok?prism(R-t/Math.cos(Math.PI/n), d.D-2*t):0 };
 }
-function pushForces(d,pout,pin){ const A=surfaces(d); return { Ao:A.Ao, Ai:A.Ai, out:pout*ATM*A.Ao/1000, in:pin*ATM*A.Ai/1000 }; }
+// Forces in Newtons, from the areas rounded to 2 decimals so kids can check Pa × m² = N themselves
+function pushForces(d,pout,pin){ const A=surfaces(d), r2=x=>Math.round(x*100)/100, Ao=r2(A.Ao), Ai=r2(A.Ai); return { Ao, Ai, out:Math.round(pout*ATM)*Ao, in:Math.round(pin*ATM)*Ai }; }
 function renderPumpForces(d,pout){
-  const F=pushForces(d,pout,state.pin), tonnes=kN=>kN/9.81;
-  $('fOut').innerHTML = `<b>${fmt(F.out)} kN</b> pushing in<br>${atmTxt(pout)} × ${fmt(F.Ao,2)} m² of outside wall · about ${fmt(tonnes(F.out))} tonnes of weight`;
-  $('fIn').innerHTML = `<b>${fmt(F.in)} kN</b> pushing out<br>${state.pin===0?'0 atm':atmTxt(state.pin)} × ${fmt(F.Ai,2)} m² of inside wall · about ${fmt(tonnes(F.in))} tonnes of weight`;
+  const F=pushForces(d,pout,state.pin), pounds=N=>N/4.448;
+  $('fOut').innerHTML = `<b>${fmt(F.out)} Newtons</b> pushing in<br>${paTxt(pout)} × ${fmt(F.Ao,2)} m² of outside wall · about ${fmt(pounds(F.out))} pounds`;
+  $('fIn').innerHTML = `<b>${fmt(F.in)} Newtons</b> pushing out<br>${paTxt(state.pin)} × ${fmt(F.Ai,2)} m² of inside wall · about ${fmt(pounds(F.in))} pounds`;
 }
 
 /* ================= HULL DRAWING ================= */
@@ -643,11 +644,18 @@ function drawHull(){
   }
   // labels
   const F=pushForces(d,pout,pin);
-  hx.font='800 14px Nunito, system-ui, sans-serif'; hx.textAlign='left'; hx.textBaseline='top';
-  hx.fillStyle = deep>.45 ? '#cfe6ff' : '#1d67c9';
-  hx.fillText(`Outside: ${atmTxt(pout)}. Water pushes in with ${fmt(F.out)} kN`, 10, 10);
-  hx.fillStyle = deep>.45 ? '#ffd28a' : '#9a5a00';
-  hx.fillText(`Inside: ${pin===0?'0 atm (empty)':atmTxt(pin)}. Air pushes out with ${fmt(F.in)} kN`, 10, 30);
+  hx.font=`800 ${W<500?12:14}px Nunito, system-ui, sans-serif`; hx.textAlign='left'; hx.textBaseline='top';
+  const lh = W<500?16:20;
+  const lines = [
+    [deep>.45 ? '#cfe6ff' : '#1d67c9', `Outside: ${atmTxt(pout)}.`, `Water pushes in with ${fmt(F.out)} Newtons`],
+    [deep>.45 ? '#ffd28a' : '#9a5a00', `Inside: ${pin===0?'0 atm (empty)':atmTxt(pin)}.`, `Air pushes out with ${fmt(F.in)} Newtons`],
+  ];
+  let ly=10;
+  for (const [col,a,b] of lines){
+    hx.fillStyle=col; const one=`${a} ${b}`;
+    if (hx.measureText(one).width <= W-20){ hx.fillText(one,10,ly); ly+=lh; }
+    else { hx.fillText(a,10,ly); hx.fillText(b,10,ly+lh-2); ly+=2*lh; }
+  }
   // scale bar
   hx.fillStyle = deep>.45 ? '#fff' : '#1f2a37'; hx.strokeStyle=hx.fillStyle; hx.lineWidth=2;
   const sbx=W-14-s, sby=H-16; hx.beginPath(); hx.moveTo(sbx,sby); hx.lineTo(sbx+s,sby); hx.moveTo(sbx,sby-4); hx.lineTo(sbx,sby+4); hx.moveTo(sbx+s,sby-4); hx.lineTo(sbx+s,sby+4); hx.stroke();
@@ -731,8 +739,8 @@ function drawSea(){
   }
 }
 function updateGauge(){
-  if (state.dive){ const z=state.dive.z, p=1+z/10; $('gDepth').textContent=`${fmt(z)} m`; $('gP').textContent=atmTxt(p); $('gPsi').textContent=psiTxt(p); }
-  else { $('gDepth').textContent='0 m (at the lab)'; $('gP').textContent='1 atm'; $('gPsi').textContent=psiTxt(1); }
+  if (state.dive){ const z=state.dive.z, p=1+z/10; $('gDepth').textContent=`${fmt(z)} m`; $('gP').textContent=atmTxt(p); $('gPa').textContent=paTxt(p); }
+  else { $('gDepth').textContent='0 m (at the lab)'; $('gP').textContent='1 atm'; $('gPa').textContent=paTxt(1); }
 }
 
 /* ================= DIVE ================= */
@@ -796,7 +804,7 @@ function renderTable(){
   tb.innerHTML = state.tests.slice().reverse().map(r=>{
     const res=resultText(r);
     const deepest = r.kind==='sea' ? `${fmt(r.depth)} m` : '—';
-    const pr = r.kind==='sea' ? `${atmTxt(1+r.depth/10)} · ${psiTxt(1+r.depth/10)}` : `${atmTxt(r.tankP)} · ${psiTxt(r.tankP)}`;
+    const pr = r.kind==='sea' ? `${atmTxt(1+r.depth/10)} · ${paTxt(1+r.depth/10)}` : `${atmTxt(r.tankP)} · ${paTxt(r.tankP)}`;
     return `<tr class="${r.win?'win':''}"><td>${r.id}</td><td><span class="tag ${r.kind==='sea'?'sea':''}">${r.kind==='sea'?'Sea':'Tank'}</span></td><td>${MATERIALS[r.mat].name}</td><td>${shapeLabel(r)}</td><td class="r">${fmt(r.D,1)} m</td><td class="r">${fmt(r.tcm,1)} cm</td><td class="r">${r.pin===0?'0 (empty)':atmTxt(r.pin)}</td><td class="r">${fmt(r.ballast||0)} kg</td><td class="res ${res.c}">${res.t}</td><td class="r">${deepest}</td><td class="r">${pr}</td></tr>`;
   }).join('');
 }
