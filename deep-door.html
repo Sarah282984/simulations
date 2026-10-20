@@ -1,0 +1,827 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Deep Door</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Design a test submarine, dive it, and discover the pressure at every depth it reaches.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800;900&display=swap" rel="stylesheet">
+<style>
+  /* Layout: design controls | hull + lab tank | tall ocean column; results table underneath. Same family as Buoyancy Explorer. */
+  :root{
+    --ink:#1f2a37; --muted:#5b6574; --paper:#f7f3ea; --panel:#fff; --line:#e3dccd; --chip:#f1ece1;
+    --blue:#1d67c9; --blue-soft:#e6f0fc; --green:#23855a; --green-soft:#e2f4ea;
+    --red:#c8432f; --red-soft:#fbeae6; --amber:#e7962b; --amber-soft:#fdf1df; --hl:#fff1b8;
+    --sea1:#bfe0f2; --sea2:#0d2a4a; --font:"Nunito",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    color-scheme:light;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  body{margin:0}
+  body{background:var(--paper);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.45}
+  .wrap{max-width:1360px;margin:0 auto;padding-block:16px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  header{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 16px;margin-bottom:14px}
+  header h1{font-size:clamp(1.6rem,3.2vw,2.1rem);font-weight:900;margin:0;letter-spacing:-.01em;text-wrap:balance}
+  .intro{margin:-4px 0 16px;max-width:78ch;font-size:1.02rem;font-weight:700;color:var(--ink)}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 1px 2px rgba(0,0,0,.04);min-width:0}
+  h2{font-size:1.02rem;font-weight:900;margin:0 0 10px;letter-spacing:.01em}
+  .lbl{font-size:.74rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 6px}
+  .main{display:grid;grid-template-columns:300px minmax(0,1fr) 210px;gap:16px;align-items:start}
+  @media (max-width:1100px){.main{grid-template-columns:290px minmax(0,1fr)}.ocean{grid-column:1 / -1}}
+  @media (max-width:760px){.main{grid-template-columns:minmax(0,1fr)}}
+
+  /* controls */
+  .group{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{font:inherit;font-weight:800;font-size:.9rem;cursor:pointer;background:var(--panel);color:var(--ink);border:2px solid var(--line);border-radius:999px;padding:5px 11px;display:inline-flex;align-items:center;gap:7px}
+  .chip:hover{border-color:#cbbfa6}
+  .chip[aria-pressed="true"]{border-color:var(--amber);background:var(--amber-soft)}
+  .chip:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
+  .chip:disabled{opacity:.5;cursor:not-allowed}
+  .sw{width:14px;height:14px;border-radius:50%;border:1px solid rgba(0,0,0,.25);flex:none}
+  .spec{font-size:.8rem;color:var(--muted);font-weight:700;line-height:1.35}
+  .sides{display:flex;align-items:center;gap:8px;font-weight:800;font-size:.9rem}
+  .step{font:inherit;font-weight:900;width:30px;height:30px;border-radius:50%;border:2px solid var(--line);background:var(--panel);cursor:pointer;color:var(--ink)}
+  .step:disabled{opacity:.4;cursor:not-allowed}
+  .slider-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .slider-row output{font-weight:900;font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:var(--amber)}
+  .checks{display:flex;flex-direction:column;gap:10px;border-top:1px dashed var(--line);padding-top:12px;margin-top:4px}
+  .check{display:grid;grid-template-columns:24px minmax(0,1fr);gap:8px;align-items:start;font-size:.88rem}
+  .check .ic{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:.8rem;color:#fff;background:var(--green)}
+  .check.bad .ic{background:var(--red)}
+  .check b{display:block;font-weight:900}
+  .check span{color:var(--muted);font-weight:700}
+  .meter{position:relative;height:14px;border-radius:7px;background:linear-gradient(90deg,var(--blue-soft),#f4efe4 50%,var(--red-soft));margin:6px 0 2px;border:1px solid var(--line)}
+  .meter .zone{position:absolute;top:-1px;bottom:-1px;background:var(--green-soft);border:2px solid var(--green);border-radius:6px}
+  .meter .mark{position:absolute;top:-5px;width:4px;height:22px;margin-left:-2px;border-radius:2px;background:var(--ink)}
+  .meter-ends{display:flex;justify-content:space-between;font-size:.7rem;font-weight:800;color:var(--muted)}
+  .go{font:inherit;font-weight:900;font-size:1.1rem;width:100%;margin-top:12px;padding:12px;border-radius:14px;border:0;background:var(--blue);color:#fff;cursor:pointer;box-shadow:0 2px 0 #134a92}
+  .go:hover{filter:brightness(1.07)}
+  .go:disabled{background:#9aa6b4;box-shadow:none;cursor:not-allowed}
+
+  /* hull view */
+  .view-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 12px}
+  .mode{font-weight:900;font-size:.8rem;padding:3px 10px;border-radius:999px;background:var(--blue-soft);color:var(--blue)}
+  .mode.dive{background:var(--amber-soft);color:#9a5a00}
+  #hull{width:100%;aspect-ratio:16/10;display:block;border-radius:12px;max-width:100%}
+  .pumps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px;margin-top:10px}
+  @media (max-width:520px){.pumps{grid-template-columns:minmax(0,1fr)}}
+  .pump{display:flex;flex-direction:column;gap:4px;border-radius:12px;padding:8px 10px}
+  .pump.out{background:var(--blue-soft)} .pump.out input{accent-color:var(--blue)}
+  .pump.in{background:var(--amber-soft)}
+  .pump .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:0}
+  .pump.out .dot{background:var(--blue)} .pump.in .dot{background:var(--amber)}
+  .pumps .rebuild{justify-self:start}
+  .force{font-size:.86rem;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+  .force b{font-size:1.05rem;font-weight:900;color:var(--ink)}
+  .rebuild{font:inherit;font-weight:900;font-size:.85rem;border:2px solid var(--red);color:var(--red);background:var(--panel);border-radius:999px;padding:4px 12px;cursor:pointer}
+  .used{margin-top:10px}
+  .bar{height:12px;border-radius:6px;background:var(--chip);overflow:hidden;border:1px solid var(--line)}
+  .bar i{display:block;height:100%;background:var(--green);transition:width .15s}
+  .forces{margin-top:12px;border-top:1px dashed var(--line);padding-top:10px;font-size:.9rem}
+  .forces p{margin:0 0 8px;color:var(--muted);font-weight:700}
+  .frow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:5px 0;border-bottom:1px solid #f0ebe0}
+  .frow:last-child{border-bottom:0}
+  .frow .v{font-weight:900;font-variant-numeric:tabular-nums;text-align:right}
+  .frow .how{grid-column:1 / -1;font-size:.78rem;color:var(--muted);font-weight:700;font-variant-numeric:tabular-nums}
+  .frow.key{background:var(--hl);border-radius:8px;padding:6px 8px;border-bottom:0;margin:4px 0}
+
+  /* ocean */
+  .ocean{position:sticky;top:12px}
+  @media (max-width:1100px){.ocean{position:static}}
+  #sea{width:100%;height:640px;display:block;border-radius:12px}
+  @media (max-width:1100px){#sea{height:420px}}
+  .gauge{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;margin-top:10px;font-size:.88rem}
+  .gauge dt{color:var(--muted);font-weight:800}
+  .gauge dd{margin:0;font-weight:900;text-align:right;font-variant-numeric:tabular-nums}
+
+  /* results */
+  .results{margin-top:16px}
+  .res-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+  .res-head h2{margin:0}
+  .btns{display:flex;gap:8px;flex-wrap:wrap}
+  .btn{font:inherit;font-weight:800;font-size:.88rem;border:2px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:5px 13px;cursor:pointer}
+  .btn.hint{border-color:var(--amber);background:var(--amber-soft)}
+  .hintrow{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:0 0 16px}
+  .hintrow .hintbox{align-self:flex-start}
+  .hintrow .btn{flex:none}
+  .hintbox{background:var(--hl);border-radius:12px;padding:10px 14px;font-weight:700;max-width:80ch;flex:1 1 320px;min-width:0}
+  .hintbox .extra{display:block;margin-top:6px;font-weight:700;color:var(--muted)}
+  .hintbox b{font-weight:900}
+  .tablewrap{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;font-size:.88rem;font-variant-numeric:tabular-nums}
+  th{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left;padding:6px 8px;border-bottom:2px solid var(--line);white-space:nowrap}
+  td{padding:7px 8px;border-bottom:1px solid #f0ebe0;white-space:nowrap}
+  td.r,th.r{text-align:right}
+  tr.win td{background:var(--green-soft)}
+  .tag{display:inline-block;font-size:.72rem;font-weight:900;padding:1px 8px;border-radius:999px;background:var(--chip);color:var(--muted)}
+  .tag.sea{background:var(--blue-soft);color:var(--blue)}
+  .res{font-weight:800}
+  .res.bad{color:var(--red)}.res.ok{color:var(--green)}.res.meh{color:#9a5a00}
+  .empty{color:var(--muted);font-weight:700;padding:14px 8px}
+  .banner{margin-top:12px;padding:10px 14px;border-radius:12px;background:var(--green-soft);border:2px solid var(--green);font-weight:800}
+  details.about{margin-top:16px}
+  details.about summary{cursor:pointer;font-weight:900}
+  details.about .inner{max-width:75ch;font-size:.92rem}
+  details.about li{margin-bottom:6px}
+  @media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <h1>The Deep Door</h1>
+  </header>
+  <p class="intro">Edmond and Elise need to design a submarine to reach the ocean floor, 2,000 m down. It needs to be strong enough to withstand the pressure, and big enough to fit them inside. It can't be so heavy that the motor can't lift it, or so light that the motor can't sink it, either. Try out different materials, shapes, and sizes, weigh it down with ballast if you need to, and then do test runs to see how deep you can get!</p>
+  <div class="hintrow">
+    <button class="btn hint" id="hintBtn">Give me a hint</button>
+    <div class="hintbox" id="hintBox" hidden></div>
+  </div>
+
+  <div class="main">
+    <!-- DESIGN -->
+    <section class="box design" aria-labelledby="h-design">
+      <h2 id="h-design">Design your submarine</h2>
+
+      <div class="group">
+        <p class="lbl">Material</p>
+        <div class="chips" id="mats"></div>
+        <div class="spec" id="matSpec"></div>
+      </div>
+
+      <div class="group">
+        <p class="lbl">Shape</p>
+        <div class="chips" id="shapes"></div>
+        <div class="sides" id="sidesRow" hidden>
+          <button class="step" id="sidesDown" aria-label="Fewer sides">−</button>
+          <span id="sidesOut">6 sides</span>
+          <button class="step" id="sidesUp" aria-label="More sides">+</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <div class="slider-row"><label class="lbl" for="sizeIn">Width</label><output id="sizeOut"></output></div>
+        <input type="range" id="sizeIn" min="1" max="5" step="0.1">
+      </div>
+      <div class="group">
+        <div class="slider-row"><label class="lbl" for="wallIn">Wall thickness</label><output id="wallOut"></output></div>
+        <input type="range" id="wallIn" min="0.5" max="40" step="0.5">
+      </div>
+      <div class="group">
+        <div class="slider-row"><span class="lbl">Ballast (lead weights)</span><output id="ballOut"></output></div>
+        <div class="btns">
+          <button class="btn" id="ballAdd">Add ballast</button>
+          <button class="btn" id="ballRem">Take some out</button>
+        </div>
+      </div>
+
+      <div class="checks">
+        <div class="check" id="ckRoom"><div class="ic">✓</div><div><b>Room inside</b><span id="roomTxt"></span></div></div>
+        <div class="check" id="ckBal"><div class="ic">✓</div><div><b>Weight and lift</b><span id="balTxt"></span>
+          <div class="meter" aria-hidden="true"><div class="zone" id="zone"></div><div class="mark" id="mark"></div></div>
+          <div class="meter-ends"><span>floats up</span><span>sinks</span></div></div></div>
+        <div class="check" id="ckCost"><div class="ic">✓</div><div><b>Materials</b><span id="costTxt"></span></div></div>
+      </div>
+      <button class="go" id="diveBtn">Test dive</button>
+    </section>
+
+    <!-- HULL VIEW + TANK -->
+    <section class="box" aria-labelledby="h-view">
+      <div class="view-head"><h2 id="h-view">In the lab</h2><span class="mode dive" id="modeTag" hidden></span></div>
+      <p class="spec" style="margin:-4px 0 10px;font-size:.92rem">Design your submarine, and then change the pressure to see how it does before you do a test dive.</p>
+      <canvas id="hull" aria-label="Cross-section of the submarine with arrows showing pressure pushing on the walls"></canvas>
+      <div class="pumps">
+        <div class="pump out">
+          <div class="slider-row"><label class="lbl" for="tankIn"><span class="dot"></span>Pressure outside</label><output id="tankOut"></output></div>
+          <input type="range" id="tankIn" min="0" max="250" step="0.5">
+          <div class="force" id="fOut"></div>
+          <div class="spec">Pumps water into the lab tank, or out of it.</div>
+        </div>
+        <div class="pump in">
+          <div class="slider-row"><label class="lbl" for="airIn"><span class="dot"></span>Pressure inside</label><output id="airOut"></output></div>
+          <input type="range" id="airIn" min="0" max="50" step="0.5">
+          <div class="force" id="fIn"></div>
+          <div class="spec">Pumps air into the submarine, or out of it. The submarine keeps this on its dive.</div>
+        </div>
+        <button class="rebuild" id="rebuildBtn" hidden>Rebuild</button>
+      </div>
+      <div class="used">
+        <div class="slider-row"><span class="lbl">Wall strength used</span><output id="usedOut"></output></div>
+        <div class="bar"><i id="usedBar"></i></div>
+        <div class="spec" id="weakTxt" style="margin-top:4px"></div>
+      </div>
+    </section>
+
+    <!-- OCEAN -->
+    <aside class="box ocean" aria-labelledby="h-sea">
+      <h2 id="h-sea">The sea</h2>
+      <canvas id="sea" aria-label="The sea from the lab at the surface to the doorway on the floor"></canvas>
+      <dl class="gauge">
+        <dt>Depth</dt><dd id="gDepth">0 m</dd>
+        <dt>Pressure</dt><dd id="gP">1 atm</dd>
+        <dt></dt><dd id="gPsi" class="spec">14.7 psi</dd>
+      </dl>
+    </aside>
+  </div>
+
+  <div id="banner"></div>
+
+  <section class="box results" aria-labelledby="h-res">
+    <div class="res-head">
+      <h2 id="h-res">Test results</h2>
+      <div class="btns">
+        <button class="btn" id="clearBtn">Clear table</button>
+      </div>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>#</th><th>Test</th><th>Material</th><th>Shape</th><th class="r">Width</th><th class="r">Wall</th><th class="r">Air inside</th><th class="r">Ballast</th><th>What happened</th><th class="r">Deepest</th><th class="r">Pressure there</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <details class="about" id="realBox">
+    <summary>How real is this?</summary>
+    <div class="inner">
+      <p>The sea, the pressure and the forces in this game use real physics. Whether your submarine breaks is worked out with simpler versions of the equations real engineers use, so shapes and materials behave the way real ones do. The exact depths are estimates, though. Real submarines are much more complicated. Engineers also have to think about tiny cracks, joints, windows and hatches, and they build in extra strength to stay safe.</p>
+    </div>
+  </details>
+  <details class="about">
+    <summary>For grown-ups: how the sim works out what breaks</summary>
+    <div class="inner">
+      <p>The sea is set so pressure rises by exactly 1 atm for every 10 m, starting at 1 atm at the surface. Real seawater is very close to this (about 1 atm per 10.06 m), so the rounding is about half a percent.</p>
+      <ul>
+        <li><b>Sphere.</b> Imagine cutting it in half. The water pushes on the half with a force equal to pressure × the flat circle πR² (the half-sphere's shadow, because the tilted parts of the curved surface mostly push sideways and cancel). The ring of wall where the halves meet carries that force, so the average wall stress is force ÷ ring area (about PR/2t for a thin wall). In a thick wall the inner face carries more than the average, so the sim uses the thick-wall (Lamé) formula for the stress at the inner face. For thin walls the two agree.</li>
+        <li><b>Capsule</b> (a tube with rounded ends, the shape of most real submarines). Cut it the long way. Water pushes on a flat rectangle 2R × length, and two strips of wall hold it, so the stress is about PR/t, twice the sphere's. The sim uses the thick-wall (Lamé) formula here too.</li>
+        <li><b>Crumpling (buckling).</b> Thin shells can fold inward before the material itself is crushed. Sphere: classical shell formula, multiplied by 0.25 because real spheres buckle at a fraction of the textbook value. Capsule: the Windenburg–Trilling formula for tubes under outside pressure, times 0.8. These are approximate.</li>
+        <li><b>Flat walls</b> (prisms and the box) bend. Side walls use the standard clamped-plate formula (Roark), and the flat ends are treated as clamped plates too. Bending squeezes one face of the wall and stretches the other, which is why glass and granite crack: they are very strong squeezed and weak stretched. The flat-wall numbers are the roughest part of the model.</li>
+        <li><b>Materials</b> (approximate): steel 450 MPa, brass 250 MPa, glass 700 MPa squeezed / 40 MPa stretched, granite 180 / 10 MPa, oak 40 / 20 MPa. Chocolate is the joke material, with rough guesses: 1.3 tonnes per m³ (so it sinks), 8 MPa squeezed, 2 MPa stretched. It can't survive the deep sea at any size. As a check, the model puts a real 17-inch deep-sea glass float sphere (14 mm wall, rated for 6,700 m) at about 8,350 m before it fails, a plausible margin above its rating.</li>
+        <li><b>Supplies.</b> Steel is limited to 2,000 kg. A steel design that needs more than that can't be built, so it can't go in the tank or the sea. There is plenty of every other material.</li>
+        <li><b>Ballast</b> is lead, added 100 kg at a time (up to 3,000 kg). It adds weight without changing the outside shape, so it doesn't add lift. It takes up a little room inside (100 kg of lead is about 9 litres).</li>
+        <li><b>Weight and lift.</b> Lift is the weight of the water the whole outside shape pushes aside. Weight is the hull plus 150 kg for Elise, Edmond and their gear, plus any ballast, plus the air inside. The motor can push about 300 kg up or down, so the difference has to stay within ±300 kg to dive and return.</li>
+      </ul>
+    </div>
+  </details>
+</div>
+
+<script>
+/* ================= PHYSICS ================= */
+const ATM = 101325, G = 9.81, RHO_W = ATM / (G * 10), PSI = 14.696;
+const DOOR = 2000, CREW_KG = 150, PROP_KG = 300, ROOM_M3 = 1.0, TANK_MAX = 250, LEAD_RHO = 11340, BALLAST_STEP = 100, BALLAST_MAX = 3000;
+const SUPPLY = { steel:2000 };   // kg; materials not listed are unlimited
+const MATERIALS = {
+  brass:   { name:'Brass',   rho:8500, E:100e9, nu:0.34, comp:250e6, tens:250e6, ductile:true,  color:'#cfa042', note:'Bends before it breaks.' },
+  glass:   { name:'Glass',   rho:2230, E:64e9,  nu:0.20, comp:700e6, tens:40e6, ductile:false, color:'#9fd3e4', note:'Cracks instead of bending.' },
+  granite: { name:'Granite', rho:2700, E:50e9,  nu:0.25, comp:180e6, tens:10e6, ductile:false, color:'#8f8781', note:'Cracks instead of bending.' },
+  oak:     { name:'Oak',     rho:750,  E:12e9,  nu:0.35, comp:40e6,  tens:20e6, ductile:false, color:'#a8743f', note:'Splinters when it breaks.' },
+  choc:    { name:'Chocolate', rho:1300, E:1.5e9, nu:0.35, comp:8e6,  tens:2e6,  ductile:false, color:'#5a3825', note:'Delicious. Snaps instead of bending.' },
+  steel:   { name:'Steel',   rho:7850, E:200e9, nu:0.30, comp:450e6, tens:450e6, ductile:true,  color:'#8793a0', note:'Bends before it breaks.' },
+};
+const SHAPES = { cylinder:'Capsule', prism:'Prism', box:'Box', sphere:'Sphere' };
+const BETA = [[1,.3078],[1.2,.3834],[1.4,.4356],[1.6,.4680],[1.8,.4872],[2,.4974],[3,.5]];
+function betaRect(L, a){
+  const r = Math.max(L,a)/Math.min(L,a);
+  if (r >= 3) return 0.5;
+  for (let i=1;i<BETA.length;i++){ const [x0,y0]=BETA[i-1],[x1,y1]=BETA[i]; if (r<=x1) return y0+(y1-y0)*(r-x0)/(x1-x0); }
+  return 0.5;
+}
+function geometry(d){
+  const R=d.D/2, t=d.t; let Vo, Vi, ok=true;
+  if (d.shape==='sphere'){ const ri=R-t; ok=ri>0.05; Vo=4/3*Math.PI*R**3; Vi=ok?4/3*Math.PI*ri**3:0; }
+  else if (d.shape==='cylinder'){ const ri=R-t; ok=ri>0.05; Vo=Math.PI*R*R*d.D+4/3*Math.PI*R**3; Vi=ok?Math.PI*ri*ri*d.D+4/3*Math.PI*ri**3:0; }
+  else if (d.shape==='box'){ const ai=d.D-2*t; ok=ai>0.1; Vo=d.D**3; Vi=ok?ai**3:0; }
+  else { const n=d.n, area=r=>n/2*r*r*Math.sin(2*Math.PI/n); const Ri=R-t/Math.cos(Math.PI/n), Li=d.D-2*t; ok=Ri>0.05&&Li>0.1; Vo=area(R)*d.D; Vi=ok?area(Ri)*Li:0; }
+  return { Vo, Vi, Vs:Vo-Vi, ok };
+}
+function weights(d){
+  const m=MATERIALS[d.mat], g=geometry(d);
+  const bal=d.ballast||0, room=g.Vi-bal/LEAD_RHO;
+  const hull=m.rho*g.Vs, air=1.2*d.pin*Math.max(room,0), total=hull+CREW_KG+bal+air, lift=RHO_W*g.Vo;
+  const supply=SUPPLY[d.mat]||null;
+  return { hull, total, lift, net:total-lift, room, ok:g.ok, supply, enough:!supply||hull<=supply };
+}
+function check(d, pout, pin){
+  const m=MATERIALS[d.mat], Po=pout*ATM, Pi=pin*ATM, dP=Po-Pi, R=d.D/2, t=d.t, fails=[];
+  const add=(mode,part,stress,limit)=>fails.push({mode,part,stress,limit,ratio:stress/limit});
+  if (d.shape==='sphere'||d.shape==='cylinder'){
+    const ri=R-t, rm=R-t/2;
+    // Thick-wall (Lamé) hoop stress at the inner face, where it is highest. Positive = squeezed.
+    // Thin-wall limits: sphere PR/2t, tube PR/t.
+    const ro3=R**3, ri3=ri**3, ro2=R*R, ri2=ri*ri;
+    let s = -((Pi*ri3-Po*ro3)/(ro3-ri3) + (Pi-Po)*ro3/(2*(ro3-ri3))), part='wall';
+    if (d.shape==='cylinder'){ s = -((Pi*ri2-Po*ro2)/(ro2-ri2) + (Pi-Po)*ro2/(ro2-ri2)); part='side wall'; }
+    if (s>=0) add('crush',part,s,m.comp); else add('burst',part,-s,m.tens);
+    if (dP>0){
+      const pSph=0.25*2*m.E/Math.sqrt(3*(1-m.nu**2))*(t/rm)**2;
+      if (d.shape==='sphere') add('buckle','wall',dP,pSph);
+      else {
+        const D=d.D, L=d.D;
+        const pCyl=0.8*2.42*m.E/Math.pow(1-m.nu**2,0.75)*Math.pow(t/D,2.5)/(L/D-0.45*Math.sqrt(t/D));
+        add('buckle','side wall',dP,pCyl); add('buckle','rounded end',dP,pSph);
+      }
+    }
+  } else {
+    let a,L,rf,n,sm;
+    if (d.shape==='box'){ n=4; a=d.D-t; L=a; rf=a/2; sm=dP*d.D/(4*t); }
+    else { n=d.n; const Rm=R-t/2; a=2*Rm*Math.sin(Math.PI/n); L=d.D-t; rf=Rm*Math.cos(Math.PI/n); sm=dP*(R*Math.cos(Math.PI/n))/t; }
+    const aP=Math.abs(dP);
+    const sb=betaRect(L,a)*aP*(a/t)**2;
+    const fn=1+0.64*(4/n)**2;
+    const se=d.shape==='box'?sb:0.75*fn*aP*(rf/t)**2;
+    const parts=d.shape==='box'?[['flat side',sb,sm]]:[['flat side',sb,sm],['flat end',se,0]];
+    for (const [part,s_b,s_m] of parts){
+      const tensFace=dP>=0?Math.max(s_b-s_m,0):s_b+Math.abs(s_m);
+      const compFace=dP>=0?s_b+s_m:Math.max(s_b-Math.abs(s_m),0);
+      add('crack',part,tensFace,m.tens); add('bend',part,compFace,m.comp);
+    }
+  }
+  fails.sort((x,y)=>y.ratio-x.ratio);
+  return { ok:fails[0].ratio<=1, dir:dP>=0?'in':'out', ...fails[0] };
+}
+function failDepth(d){
+  for (let z=0; z<=DOOR; z++){ const c=check(d,1+z/10,d.pin); if(!c.ok) return {depth:z,...c}; }
+  return null;
+}
+// words for what happened
+function verb(mat, mode, dir){
+  const m=MATERIALS[mat], way = dir==='out' ? 'outward' : 'inward';
+  if (mode==='buckle') return 'crumpled inward';
+  if (mode==='crush') return 'was crushed';
+  if (mode==='burst') return m.ductile?'bulged out and split':'burst outward';
+  if (mode==='bend') return m.ductile?`bent ${way}`:'was crushed';
+  if (mode==='crack') return m.ductile?`bent ${way}`:(mat==='oak'?'splintered':mat==='choc'?'snapped':'cracked');
+  return 'broke';
+}
+function partName(p){ return {wall:'The wall','side wall':'The side wall','rounded end':'A rounded end','flat side':'A flat side','flat end':'A flat end'}[p]||'The wall'; }
+
+/* ================= STATE ================= */
+const state = { mat:'steel', shape:'box', n:6, D:1.2, tcm:2.5, pin:1, ballast:0, tank:1, broken:null, dive:null, tests:[], hintStep:0 };
+try { const s=JSON.parse(localStorage.getItem('deepdoor-tests-v1')||'null'); if (Array.isArray(s)) state.tests=s; } catch(e){}
+function save(){ try{ localStorage.setItem('deepdoor-tests-v1', JSON.stringify(state.tests)); }catch(e){} }
+const design = () => ({ mat:state.mat, shape:state.shape, n:state.n, D:state.D, t:state.tcm/100, pin:state.pin, ballast:state.ballast });
+const $ = id => document.getElementById(id);
+const fmt = (x,dp=0) => Number(x).toLocaleString('en-US',{minimumFractionDigits:dp,maximumFractionDigits:dp});
+const sig = x => { const a=Math.abs(x); return a>=100?fmt(x):a>=10?fmt(x,1):a>=1?fmt(x,2):fmt(x,3); };
+const atmTxt = p => `${fmt(p, p<10&&p%1?1:0)} atm`;
+const psiTxt = p => `${fmt(p*PSI)} psi`;
+const maxKnown = () => state.tests.filter(r=>r.kind==='sea').reduce((m,r)=>Math.max(m,r.depth),0);
+const shapeLabel = r => r.shape==='prism' ? `Prism (${r.n} sides)` : SHAPES[r.shape];
+
+/* ================= CONTROLS ================= */
+function buildChips(){
+  $('mats').innerHTML = Object.entries(MATERIALS).map(([k,m])=>`<button class="chip" data-mat="${k}" aria-pressed="false"><span class="sw" style="background:${m.color}"></span>${m.name}</button>`).join('');
+  $('shapes').innerHTML = Object.entries(SHAPES).map(([k,v])=>`<button class="chip" data-shape="${k}" aria-pressed="false">${v}</button>`).join('');
+  $('mats').addEventListener('click',e=>{ const b=e.target.closest('[data-mat]'); if(!b||state.dive) return; state.mat=b.dataset.mat; changed(); });
+  $('shapes').addEventListener('click',e=>{ const b=e.target.closest('[data-shape]'); if(!b||state.dive) return; state.shape=b.dataset.shape; changed(); });
+  $('sidesDown').onclick=()=>{ if(state.n>3&&!state.dive){state.n--;changed();} };
+  $('sidesUp').onclick=()=>{ if(state.n<12&&!state.dive){state.n++;changed();} };
+  $('sizeIn').value=state.D; $('wallIn').value=state.tcm; $('airIn').value=state.pin; $('tankIn').value=state.tank;
+  $('sizeIn').oninput=e=>{ state.D=+e.target.value; changed(); };
+  $('wallIn').oninput=e=>{ state.tcm=+e.target.value; changed(); };
+  $('airIn').oninput=e=>{ const prev=state.pin; state.pin=+e.target.value; pumpMoved('in',prev); };
+  $('tankIn').oninput=e=>{ const prev=state.tank; state.tank=+e.target.value; pumpMoved('out',prev); };
+  $('rebuildBtn').onclick=()=>{ state.broken=null; state.tank=1; state.pin=1; $('tankIn').value=1; $('airIn').value=1; render(); };
+  $('diveBtn').onclick=startDive;
+  $('ballAdd').onclick=()=>{ if(state.dive) return; state.ballast=Math.min(BALLAST_MAX,state.ballast+BALLAST_STEP); changed(); };
+  $('ballRem').onclick=()=>{ if(state.dive) return; state.ballast=Math.max(0,state.ballast-BALLAST_STEP); changed(); };
+  $('hintBtn').onclick=showHint;
+  $('clearBtn').onclick=()=>{ if(state.dive) return; state.tests=[]; save(); $('banner').innerHTML=''; render(); };
+}
+// A design change keeps both pump settings. If the new design can't take them, it shows as broken (not recorded).
+function changed(){
+  state.broken=null;
+  const d=design();
+  if (geometry(d).ok && weights(d).enough){ const c=check(d,state.tank,state.pin); if(!c.ok) state.broken={...c, p:state.tank, pin:state.pin, where:'tank'}; }
+  render();
+}
+// Moving one pump changes only that pressure. If the hull breaks on the way, record where.
+function pumpMoved(which, prev){
+  if (state.broken || state.dive) { render(); return; }
+  const d=design();
+  if (!geometry(d).ok || !weights(d).enough){ render(); return; }
+  const now = which==='out' ? state.tank : state.pin;
+  const steps=Math.max(1,Math.round(Math.abs(now-prev)*10));
+  for (let i=1;i<=steps;i++){
+    const v=Math.round((prev+(now-prev)*i/steps)*10)/10;
+    const po = which==="out"?v:state.tank;
+    const c=check(d, po, which==='in'?v:state.pin);
+    if (!c.ok){
+      state.broken={...c, p:po, pin:which==='in'?v:state.pin, where:'tank'};
+      record({kind:'tank', ...snap(), pin:state.broken.pin, mode:c.mode, part:c.part, dir:c.dir, tankP:po});
+      break;
+    }
+  }
+  render();
+}
+function snap(){ return { mat:state.mat, shape:state.shape, n:state.n, D:state.D, tcm:state.tcm, pin:state.pin, ballast:state.ballast }; }
+
+/* ================= RENDER PANEL ================= */
+function render(){
+  const d=design(), w=weights(d), m=MATERIALS[d.mat], diving=!!state.dive;
+  document.querySelectorAll('[data-mat]').forEach(b=>{ b.setAttribute('aria-pressed', b.dataset.mat===state.mat); b.disabled=diving; });
+  document.querySelectorAll('[data-shape]').forEach(b=>{ b.setAttribute('aria-pressed', b.dataset.shape===state.shape); b.disabled=diving; });
+  ['sizeIn','wallIn'].forEach(id=>$(id).disabled=diving);
+  ['tankIn','airIn'].forEach(id=>$(id).disabled = diving || !w.ok || !w.enough);
+  $('sidesRow').hidden = state.shape!=='prism';
+  $('sidesOut').textContent = `${state.n} sides`;
+  $('sidesDown').disabled = diving||state.n<=3; $('sidesUp').disabled = diving||state.n>=12;
+  $('matSpec').innerHTML = `${fmt(m.rho/1000,2)} tonnes per m³ (water: 1.03). Can take ${fmt(m.comp/ATM)} atm squeezed, ${fmt(m.tens/ATM)} atm stretched. ${m.note}`;
+  $('sizeOut').textContent = `${fmt(state.D,1)} m`;
+  $('wallOut').textContent = `${fmt(state.tcm,1)} cm`;
+  $('ballOut').textContent = `${fmt(state.ballast)} kg`;
+  $('ballAdd').disabled = diving || state.ballast>=BALLAST_MAX; $('ballRem').disabled = diving || state.ballast<=0;
+  $('airOut').textContent = state.pin===0 ? '0 atm (empty)' : atmTxt(state.pin);
+  $('tankOut').textContent = `${atmTxt(state.tank)} · ${psiTxt(state.tank)}`;
+  if (state.pin!==0) $('airOut').textContent += ` · ${psiTxt(state.pin)}`;
+
+  // checks
+  const roomOK = w.ok && w.room>=ROOM_M3;
+  setCheck('ckRoom', roomOK);
+  $('roomTxt').textContent = !w.ok ? 'The walls fill the whole inside. No room at all.'
+    : `${fmt(w.room,2)} m³ inside. Elise and Edmond need ${fmt(ROOM_M3,1)} m³.`;
+  const net=w.net, balOK = w.ok && Math.abs(net)<=PROP_KG;
+  setCheck('ckBal', balOK);
+  let bt = `Weighs ${fmt(w.total)} kg, water lifts ${fmt(w.lift)} kg. `;
+  if (net < -PROP_KG) bt += `Floats up with ${fmt(-net)} kg to spare. The motor can only push ${PROP_KG} kg down.`;
+  else if (net > PROP_KG) bt += `Sinks with ${fmt(net)} kg extra. The motor can only lift ${PROP_KG} kg back up.`;
+  else bt += `${net<0?'Floats up':'Sinks'} with ${fmt(Math.abs(net))} kg extra. The motor can handle that.`;
+  $('balTxt').textContent = bt;
+  const span=1500, pos=v=>Math.max(0,Math.min(100,(v+span)/(2*span)*100));
+  $('zone').style.left = pos(-PROP_KG)+'%'; $('zone').style.width=(pos(PROP_KG)-pos(-PROP_KG))+'%';
+  $('mark').style.left = pos(net)+'%';
+  setCheck('ckCost', w.enough);
+  $('costTxt').textContent = !w.supply
+    ? `Uses ${fmt(w.hull)} kg of ${m.name.toLowerCase()}. There's plenty.`
+    : w.enough
+    ? `Uses ${fmt(w.hull)} kg of ${m.name.toLowerCase()}. The workshop only has ${fmt(w.supply)} kg.`
+    : `Not enough ${m.name.toLowerCase()} to build this. It needs ${fmt(w.hull)} kg, and the workshop only has ${fmt(w.supply)} kg.`;
+  $('diveBtn').disabled = diving || !w.ok || !w.enough;
+  $('diveBtn').textContent = diving ? 'Diving…' : (w.ok && !w.enough) ? `Not enough ${m.name.toLowerCase()}` : 'Test dive';
+
+  // view mode
+  const pout = viewPout();
+  $('modeTag').hidden = !diving;
+  if (diving) $('modeTag').textContent = `On a test dive · ${fmt(state.dive.z)} m`;
+  renderPumpForces(d, pout);
+  $('rebuildBtn').hidden = !state.broken || diving;
+
+  // strength used
+  let ratio=0, worst=null;
+  if (w.ok){ worst=check(d,pout,state.pin); ratio=worst.ratio; }
+  const broken = state.broken;
+  const pct = broken ? 100 : Math.min(100, ratio*100);
+  $('usedOut').textContent = broken ? 'broken' : `${fmt(Math.min(ratio*100,999))}%`;
+  const bar=$('usedBar'); bar.style.width=pct+'%';
+  bar.style.background = pct>=100?'var(--red)':pct>70?'var(--amber)':'var(--green)';
+  $('weakTxt').textContent = broken
+    ? `${partName(broken.part)} ${verb(d.mat,broken.mode,broken.dir)}${broken.where==='tank'?` with ${atmTxt(broken.p)} outside and ${atmTxt(broken.pin)} inside`:''}.`
+    : worst ? `Closest to breaking: ${partName(worst.part).toLowerCase()} ${({buckle:'crumpling inward',crush:'being crushed',burst:'bursting outward',bend:m.ductile?`bending ${worst.dir==='out'?'outward':'inward'}`:'being crushed',crack:m.ductile?`bending ${worst.dir==='out'?'outward':'inward'}`:'cracking'})[worst.mode]}.` : '';
+
+  drawHull();
+  renderTable();
+  drawSea();
+  updateGauge();
+}
+function setCheck(id, ok){ const el=$(id); el.classList.toggle('bad',!ok); el.querySelector('.ic').textContent = ok?'✓':'✗'; }
+function viewPout(){ return state.dive ? 1+state.dive.z/10 : state.tank; }
+
+function renderForces(d, pout){
+  const box=$('forces'), g=geometry(d);
+  if (!g.ok){ box.innerHTML='<p>Make the walls thinner or the submarine wider so there is space inside.</p>'; return; }
+  const pin=state.pin, R=d.D/2, t=d.t, ri=R-t;
+  const kN = (p,a) => p*ATM*a/1000;
+  const tonnes = f => f*1000/9.81/1000;
+  const row = (label, v, how, key) => `<div class="frow${key?' key':''}"><span>${label}</span><span class="v">${v}</span>${how?`<span class="how">${how}</span>`:''}</div>`;
+  const where = state.dive ? 'the sea' : 'the tank';
+  let html='';
+  if (d.shape==='sphere' || d.shape==='cylinder'){
+    let Ao, Ai, Aw, intro;
+    if (d.shape==='sphere'){
+      Ao=Math.PI*R*R; Ai=Math.PI*ri*ri; Aw=Math.PI*(R*R-ri*ri);
+      intro='Imagine cutting the submarine in half. Every bit of water pushes straight in on the wall, but only the push along the cut adds up. Together it is the same as the pressure pushing on the flat circle where you cut.';
+    } else {
+      const L=d.D; Ao=2*R*L; Ai=2*ri*L; Aw=2*t*L;
+      intro='Imagine cutting the middle tube in half the long way. The water pushing on the curved half adds up to the pressure pushing on the flat rectangle where you cut.';
+    }
+    const Fo=kN(pout,Ao), Fi=kN(pin,Ai), net=Fo-Fi, s=net*1000/Aw/ATM;
+    html = `<p>${intro}</p>`
+      + row(`Water in ${where} pushes in`, `${sig(Fo)} kN`, `${atmTxt(pout)} on ${sig(Ao)} m² · about ${sig(tonnes(Fo))} tonnes of weight`)
+      + row('Air inside pushes out', `${sig(Fi)} kN`, `${pin===0?'0 atm (empty)':atmTxt(pin)} on ${sig(Ai)} m²`)
+      + row(net>=0?'Left over, squeezing the wall':'Left over, stretching the wall', `${sig(Math.abs(net))} kN`)
+      + row('Wall that holds it (the cut edge)', `${sig(Aw)} m²`, d.shape==='sphere'?'a ring as thick as the wall':'two strips as thick as the wall')
+      + row(`Force on each m² of wall (F ÷ A)`, `${fmt(Math.abs(s))} atm`, `${MATERIALS[d.mat].name} can take ${fmt((net>=0?MATERIALS[d.mat].comp:MATERIALS[d.mat].tens)/ATM)} atm ${net>=0?'squeezed':'stretched'}`, true);
+  } else {
+    let a, L;
+    if (d.shape==='box'){ a=d.D; L=d.D; } else { a=2*R*Math.sin(Math.PI/d.n); L=d.D; }
+    const ai = d.shape==='box' ? d.D-2*t : 2*(R-t/Math.cos(Math.PI/d.n))*Math.sin(Math.PI/d.n);
+    const Ao=a*L, Ai=Math.max(ai,0)*(L-2*t), Fo=kN(pout,Ao), Fi=kN(pin,Ai), net=Fo-Fi;
+    html = `<p>Look at one flat side. The water pushes straight in on it, and the air inside pushes straight out.</p>`
+      + row(`Water in ${where} pushes in`, `${sig(Fo)} kN`, `${atmTxt(pout)} on ${sig(Ao)} m² · about ${sig(tonnes(Fo))} tonnes of weight`)
+      + row('Air inside pushes out', `${sig(Fi)} kN`, `${pin===0?'0 atm (empty)':atmTxt(pin)} on ${sig(Ai)} m²`)
+      + row(net>=0?'Left over, pushing the side in':'Left over, pushing the side out', `${sig(Math.abs(net))} kN`, null, true)
+      + `<p style="margin-top:8px">A flat side bends in the middle, like a trampoline. Bending squeezes one face of the wall and stretches the other, so the wall feels much more than this force spread over its edges.</p>`;
+  }
+  box.innerHTML = html;
+}
+
+// Total surface the water pushes on (outside) and the air pushes on (inside), in m²
+function surfaces(d){
+  const R=d.D/2, t=d.t, g=geometry(d);
+  const sph=r=>4*Math.PI*r*r;
+  if (d.shape==='sphere') return { Ao:sph(R), Ai:g.ok?sph(R-t):0 };
+  if (d.shape==='cylinder'){ const cap=r=>2*Math.PI*r*d.D+sph(r); return { Ao:cap(R), Ai:g.ok?cap(R-t):0 }; }
+  if (d.shape==='box'){ const ai=d.D-2*t; return { Ao:6*d.D*d.D, Ai:g.ok?6*ai*ai:0 }; }
+  const n=d.n, prism=(r,L)=>n*2*r*Math.sin(Math.PI/n)*L + 2*(n/2*r*r*Math.sin(2*Math.PI/n));
+  return { Ao:prism(R,d.D), Ai:g.ok?prism(R-t/Math.cos(Math.PI/n), d.D-2*t):0 };
+}
+function pushForces(d,pout,pin){ const A=surfaces(d); return { Ao:A.Ao, Ai:A.Ai, out:pout*ATM*A.Ao/1000, in:pin*ATM*A.Ai/1000 }; }
+function renderPumpForces(d,pout){
+  const F=pushForces(d,pout,state.pin), tonnes=kN=>kN/9.81;
+  $('fOut').innerHTML = `<b>${fmt(F.out)} kN</b> pushing in<br>${atmTxt(pout)} × ${fmt(F.Ao,2)} m² of outside wall · about ${fmt(tonnes(F.out))} tonnes of weight`;
+  $('fIn').innerHTML = `<b>${fmt(F.in)} kN</b> pushing out<br>${state.pin===0?'0 atm':atmTxt(state.pin)} × ${fmt(F.Ai,2)} m² of inside wall · about ${fmt(tonnes(F.in))} tonnes of weight`;
+}
+
+/* ================= HULL DRAWING ================= */
+const hull=$('hull'), hx=hull.getContext('2d');
+function fitCanvas(c, ctx){
+  const r=c.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+  const W=Math.max(10,Math.round(r.width)), H=Math.max(10,Math.round(r.height));
+  if (c.width!==W*dpr||c.height!==H*dpr){ c.width=W*dpr; c.height=H*dpr; }
+  ctx.setTransform(dpr,0,0,dpr,0,0); return {W,H};
+}
+// outline as polyline (closed) of {x,y} in metres, centred at 0,0, plus outward normals
+function outline(shape, n, D, inset){
+  const pts=[];
+  const R=D/2-inset;
+  if (shape==='sphere'){ for(let i=0;i<72;i++){const a=i/72*2*Math.PI; pts.push({x:R*Math.cos(a),y:R*Math.sin(a),nx:Math.cos(a),ny:Math.sin(a)});} }
+  else if (shape==='cylinder'){
+    const h=D/2; // half tube length
+    for(let i=0;i<=24;i++){const x=-h+i/24*2*h; pts.push({x,y:-R,nx:0,ny:-1});}
+    for(let i=1;i<36;i++){const a=-Math.PI/2+i/36*Math.PI; pts.push({x:h+R*Math.cos(a),y:R*Math.sin(a),nx:Math.cos(a),ny:Math.sin(a)});}
+    for(let i=0;i<=24;i++){const x=h-i/24*2*h; pts.push({x,y:R,nx:0,ny:1});}
+    for(let i=1;i<36;i++){const a=Math.PI/2+i/36*Math.PI; pts.push({x:-h+R*Math.cos(a),y:R*Math.sin(a),nx:Math.cos(a),ny:Math.sin(a)});}
+  } else {
+    const k = shape==='box'?4:n;
+    let Rc = shape==='box' ? (D/2-inset)*Math.SQRT2 : (D/2) - inset/Math.cos(Math.PI/k);
+    const off = Math.PI/2 + Math.PI/k; // flat side at the bottom
+    const V=[]; for(let i=0;i<k;i++){const a=off+i/k*2*Math.PI; V.push({x:Rc*Math.cos(a),y:Rc*Math.sin(a)});}
+    for(let i=0;i<k;i++){ const A=V[i],B=V[(i+1)%k], ex=B.x-A.x, ey=B.y-A.y, len=Math.hypot(ex,ey); let nx=ey/len, ny=-ex/len;
+      if (nx*(A.x+B.x)+ny*(A.y+B.y)<0){nx=-nx;ny=-ny;}
+      for(let j=0;j<12;j++){const f=j/12; pts.push({x:A.x+ex*f,y:A.y+ey*f,nx,ny,edge:j>0});} }
+  }
+  return pts;
+}
+function seeded(i){ const x=Math.sin(i*127.1+311.7)*43758.5453; return x-Math.floor(x); }
+function drawHull(){
+  const {W,H}=fitCanvas(hull,hx), d=design(), m=MATERIALS[d.mat], g=geometry(d);
+  const pout=viewPout(), pin=state.pin;
+  // water background (lab tank or sea)
+  const deep = state.dive ? Math.min(1,state.dive.z/DOOR) : 0;
+  const grd=hx.createLinearGradient(0,0,0,H);
+  if (state.dive){ grd.addColorStop(0, mix('#bfe0f2','#123a63',deep)); grd.addColorStop(1, mix('#9ccbe6','#0b2442',deep)); }
+  else { grd.addColorStop(0,'#e3f1fa'); grd.addColorStop(1,'#cbe4f4'); }
+  hx.fillStyle=grd; hx.fillRect(0,0,W,H);
+  if (!state.dive && pout===0){ hx.fillStyle='rgba(255,255,255,.55)'; hx.fillRect(0,0,W,H); }
+  const cantBuild = g.ok && !weights(d).enough && !state.dive;
+  // scale: fit the largest possible design (cylinder 6 m long, 3 m tall)
+  const Dref=Math.max(3,d.D); // same scale up to 3 m wide, then zoom out so big designs still fit
+  const s=Math.min((W-90)/(2*Dref),(H-80)/Dref);
+  const cx=W/2, cy=H/2+4;
+  const P=(p)=>({x:cx+p.x*s,y:cy+p.y*s});
+  const outer=outline(d.shape,d.n,d.D,0), inner=g.ok?outline(d.shape,d.n,d.D,d.t):[];
+  const br=state.broken;
+  const dent=(p,i,amt)=>{ if(!br) return p; const r=seeded(i+3)*amt; const sgn = br.mode==='burst'?1:-1; return {...p,x:p.x+sgn*p.nx*r,y:p.y+sgn*p.ny*r}; };
+  const amt = br ? Math.min(0.25, d.D*0.08) : 0;
+  const path=(pts)=>{ hx.beginPath(); pts.forEach((p,i)=>{ const q=P(dent(p,i,amt)); i?hx.lineTo(q.x,q.y):hx.moveTo(q.x,q.y); }); hx.closePath(); };
+  // hull material
+  path(outer);
+  if (g.ok){ const inn=inner.slice().reverse(); inn.forEach((p,i)=>{ const q=P(dent(p,inner.length-1-i,amt)); i?hx.lineTo(q.x,q.y):hx.moveTo(q.x,q.y); }); hx.closePath(); }
+  hx.fillStyle=m.color; hx.fill('evenodd');
+  hx.strokeStyle='rgba(31,42,55,.55)'; hx.lineWidth=1.5; path(outer); hx.stroke();
+  if (g.ok){ path(inner); hx.fillStyle = pin===0 ? '#eef0f2' : '#fbfaf5'; hx.fill(); hx.stroke(); }
+  // texture
+  hx.save(); path(outer); hx.clip();
+  if (d.mat==='granite'){ for(let i=0;i<500;i++){ const x=cx+(seeded(i)-.5)*d.D*2*s, y=cy+(seeded(i+999)-.5)*d.D*s; hx.fillStyle=i%3?'rgba(255,255,255,.35)':'rgba(0,0,0,.35)'; hx.fillRect(x,y,1.6,1.6);} }
+  if (d.mat==='oak'){ hx.strokeStyle='rgba(80,45,15,.3)'; hx.lineWidth=1; for(let y=-d.D; y<d.D; y+=0.05){ hx.beginPath(); hx.moveTo(0,cy+y*s); for(let x=0;x<=W;x+=20) hx.lineTo(x,cy+y*s+Math.sin(x*.05+y*9)*2); hx.stroke(); } }
+  if (d.mat==='glass' || d.mat==='steel' || d.mat==='brass'){ const sh=hx.createLinearGradient(cx-d.D*s,cy-d.D*s/2,cx+d.D*s/2,cy+d.D*s/2); sh.addColorStop(0,'rgba(255,255,255,.45)'); sh.addColorStop(.5,'rgba(255,255,255,0)'); sh.addColorStop(1,'rgba(0,0,0,.12)'); hx.fillStyle=sh; hx.fillRect(0,0,W,H); }
+  hx.restore();
+  if (g.ok){ path(inner); hx.fillStyle = pin===0 ? '#eef0f2' : '#fbfaf5'; hx.fill(); hx.strokeStyle='rgba(31,42,55,.45)'; hx.stroke(); }
+  // ballast: 100 kg lead blocks, drawn to scale at the bottom of the inside
+  if (g.ok && d.ballast>0 && !br){
+    const side=Math.cbrt(BALLAST_STEP/LEAD_RHO)*s, nB=Math.round(d.ballast/BALLAST_STEP);
+    const bottom=Math.max(...inner.map(p=>p.y))*s+cy, perRow=Math.max(1,Math.floor((d.D/2-d.t)*1.1*s/side));
+    hx.save(); path(inner); hx.clip();
+    for (let i=0;i<nB;i++){ const row=Math.floor(i/perRow), col=i%perRow, inRow=Math.min(perRow,nB-row*perRow);
+      const x=cx+(col-inRow/2)*side, y=bottom-(row+1)*side;
+      hx.fillStyle='#4d535c'; hx.fillRect(x+0.5,y+0.5,side-1,side-1); hx.fillStyle='rgba(255,255,255,.18)'; hx.fillRect(x+0.5,y+0.5,side-1,Math.max(1.5,side*0.18)); }
+    hx.restore();
+  }
+  // crew (true size, if they fit)
+  const w=weights(d);
+  if (g.ok && w.room>=ROOM_M3 && !br) drawCrew(cx,cy,s,d);
+  // arrows: perpendicular to the surface, length in proportion to pressure
+  // Fixed scale: the same number of pixels per atm for both, so each slider changes only its own arrows.
+  const maxShaft=Math.min(W,H)*0.27, k=maxShaft/TANK_MAX, HEAD=7;
+  const shO=Math.min(k*pout,maxShaft), shI=k*pin, clipped=k*pout>maxShaft;
+  const every = d.shape==='sphere'?6 : d.shape==='cylinder'?7 : 4;
+  hx.lineWidth=2.4;
+  if (!br && pout>0) outer.forEach((p,i)=>{ if(i%every || p.edge===false) return; const q=P(p), L=HEAD+shO+3; arrow(q.x+p.nx*L, q.y+p.ny*L, q.x+p.nx*3, q.y+p.ny*3, '#1d67c9'); });
+  if (g.ok && !br && pin>0) inner.forEach((p,i)=>{ if(i%every || p.edge===false) return; const q=P(p), L=HEAD+shI+3; arrow(q.x-p.nx*L, q.y-p.ny*L, q.x-p.nx*3, q.y-p.ny*3, '#e7962b'); });
+  // cracks + bubbles when broken
+  if (br){
+    hx.strokeStyle='#1f2a37'; hx.lineWidth=2;
+    for(let k=0;k<5;k++){ const i=Math.floor(seeded(k+11)*outer.length), p=outer[i], q=P(p); hx.beginPath(); hx.moveTo(q.x,q.y); let x=q.x,y=q.y; for(let j=0;j<4;j++){ x-= p.nx*8 + (seeded(k*7+j)-.5)*10; y-= p.ny*8 + (seeded(k*5+j+2)-.5)*10; hx.lineTo(x,y);} hx.stroke(); }
+    hx.fillStyle='rgba(255,255,255,.75)';
+    for(let k=0;k<14;k++){ const x=cx+(seeded(k+40)-.5)*d.D*s*1.6, y=cy-(seeded(k+80))*H*.45; hx.beginPath(); hx.arc(x,y,2+seeded(k)*4,0,7); hx.fill(); }
+  }
+  // labels
+  const F=pushForces(d,pout,pin);
+  hx.font='800 14px Nunito, system-ui, sans-serif'; hx.textAlign='left'; hx.textBaseline='top';
+  hx.fillStyle = deep>.45 ? '#cfe6ff' : '#1d67c9';
+  hx.fillText(`Outside: ${atmTxt(pout)}. Water pushes in with ${fmt(F.out)} kN`, 10, 10);
+  hx.fillStyle = deep>.45 ? '#ffd28a' : '#9a5a00';
+  hx.fillText(`Inside: ${pin===0?'0 atm (empty)':atmTxt(pin)}. Air pushes out with ${fmt(F.in)} kN`, 10, 30);
+  // scale bar
+  hx.fillStyle = deep>.45 ? '#fff' : '#1f2a37'; hx.strokeStyle=hx.fillStyle; hx.lineWidth=2;
+  const sbx=W-14-s, sby=H-16; hx.beginPath(); hx.moveTo(sbx,sby); hx.lineTo(sbx+s,sby); hx.moveTo(sbx,sby-4); hx.lineTo(sbx,sby+4); hx.moveTo(sbx+s,sby-4); hx.lineTo(sbx+s,sby+4); hx.stroke();
+  hx.textAlign='center'; hx.textBaseline='bottom'; hx.fillText('1 m', sbx+s/2, sby-5);
+  if (d.shape==='prism'||d.shape==='box'){ hx.textAlign='left'; hx.textBaseline='bottom'; hx.fillText(d.shape==='box'?'Seen from the front':'Seen from the end', 10, H-8); }
+  if (d.shape==='cylinder'){ hx.textAlign='left'; hx.textBaseline='bottom'; hx.fillText('Seen from the side', 10, H-8); }
+  if (cantBuild){
+    hx.fillStyle='rgba(247,243,234,.72)'; hx.fillRect(0,0,W,H);
+    hx.fillStyle='#c8432f'; hx.font='900 16px Nunito, system-ui, sans-serif'; hx.textAlign='center'; hx.textBaseline='middle';
+    hx.fillText(`Not enough ${m.name.toLowerCase()} to build this`, W/2, H/2);
+  }
+}
+function arrow(x1,y1,x2,y2,col){
+  hx.strokeStyle=col; hx.fillStyle=col; hx.beginPath(); hx.moveTo(x1,y1); hx.lineTo(x2,y2); hx.stroke();
+  const a=Math.atan2(y2-y1,x2-x1), h=7; hx.beginPath(); hx.moveTo(x2,y2); hx.lineTo(x2-h*Math.cos(a-.45),y2-h*Math.sin(a-.45)); hx.lineTo(x2-h*Math.cos(a+.45),y2-h*Math.sin(a+.45)); hx.closePath(); hx.fill();
+}
+function drawCrew(cx,cy,s,d){
+  // two seated figures about 0.9 m tall, drawn to scale
+  const h=0.9*s, gap=0.28*s, baseY = cy + (d.shape==='sphere'||d.shape==='cylinder' ? (d.D/2-d.t)*0.55*s : (d.D/2-d.t)*0.9*s);
+  [[-gap,'#3b5b8c'],[gap,'#7a4b7f']].forEach(([dx,col])=>{
+    const x=cx+dx, top=baseY-h;
+    hx.fillStyle=col; hx.beginPath(); hx.ellipse(x, baseY-h*0.33, h*0.17, h*0.33, 0, 0, 7); hx.fill();
+    hx.fillStyle='#e8c4a0'; hx.beginPath(); hx.arc(x, top+h*0.14, h*0.13, 0, 7); hx.fill();
+  });
+}
+function mix(a,b,f){ const p=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)); const A=p(a),B=p(b); return `rgb(${A.map((v,i)=>Math.round(v+(B[i]-v)*f)).join(',')})`; }
+
+/* ================= SEA DRAWING ================= */
+const sea=$('sea'), sx=sea.getContext('2d');
+const FISH=[[180,.25,1],[420,.7,-1],[650,.35,1],[900,.62,-1],[1250,.3,1],[1600,.7,-1],[1820,.4,1]];
+function seaGeom(H){ const top=64, bot=H-46; return {top,bot,y:z=>top+(bot-top)*z/DOOR}; }
+function drawSea(){
+  const {W,H}=fitCanvas(sea,sx), G=seaGeom(H);
+  // sky
+  sx.fillStyle='#eaf3f8'; sx.fillRect(0,0,W,G.top);
+  // water
+  const grd=sx.createLinearGradient(0,G.top,0,G.bot); grd.addColorStop(0,'#bfe0f2'); grd.addColorStop(.35,'#3f86b8'); grd.addColorStop(1,'#0b2442');
+  sx.fillStyle=grd; sx.fillRect(0,G.top,W,G.bot-G.top);
+  // floor
+  sx.fillStyle='#4a3f35'; sx.fillRect(0,G.bot,W,H-G.bot);
+  sx.fillStyle='#5d5044'; for(let i=0;i<W;i+=14){ sx.beginPath(); sx.arc(i+7,G.bot+2,9,Math.PI,0); sx.fill(); }
+  // doorway
+  const dx=W/2, dw=34, dh=40;
+  sx.save(); sx.shadowColor='#ffd166'; sx.shadowBlur=16;
+  sx.fillStyle='#2b1d3a'; sx.beginPath(); sx.moveTo(dx-dw/2,G.bot); sx.lineTo(dx-dw/2,G.bot-dh+dw/2); sx.arc(dx,G.bot-dh+dw/2,dw/2,Math.PI,0); sx.lineTo(dx+dw/2,G.bot); sx.closePath(); sx.fill();
+  sx.strokeStyle='#ffd166'; sx.lineWidth=3; sx.stroke(); sx.restore();
+  sx.fillStyle='#ffe6a3'; sx.font='800 11px Nunito, system-ui, sans-serif'; sx.textAlign='center'; sx.textBaseline='top'; sx.fillText('the Deep Door', dx, G.bot+16);
+  // lab on a pier
+  sx.fillStyle='#7a6a55'; sx.fillRect(W/2-46,G.top-6,92,8);
+  sx.fillStyle='#e9dfcb'; sx.fillRect(W/2-30,G.top-34,44,28); sx.fillStyle='#c8432f'; sx.beginPath(); sx.moveTo(W/2-34,G.top-34); sx.lineTo(W/2-8,G.top-50); sx.lineTo(W/2+18,G.top-34); sx.fill();
+  sx.fillStyle='#5b6574'; sx.fillRect(W/2+20,G.top-40,4,34); sx.fillRect(W/2+20,G.top-40,22,3);
+  sx.fillStyle='#1f2a37'; sx.textAlign='left'; sx.fillText('Lab', 8, 10);
+  // fish
+  FISH.forEach(([z,xf,dir],i)=>{ const y=G.y(z), x=W*xf; sx.fillStyle = z<700?'rgba(255,170,60,.9)':'rgba(160,220,255,.55)'; sx.beginPath(); sx.ellipse(x,y,9,4.5,0,0,7); sx.fill(); sx.beginPath(); sx.moveTo(x-dir*8,y); sx.lineTo(x-dir*15,y-5); sx.lineTo(x-dir*15,y+5); sx.fill(); });
+  // ticks: depth left, known pressure right
+  const known=Math.max(maxKnown(), state.dive?state.dive.zMax:0);
+  sx.font='800 10.5px Nunito, system-ui, sans-serif'; sx.textBaseline='middle';
+  for(let z=0; z<=DOOR; z+=250){
+    const y=G.y(z), light=z>500;
+    sx.strokeStyle= light?'rgba(255,255,255,.45)':'rgba(31,42,55,.4)'; sx.lineWidth=1; sx.beginPath(); sx.moveTo(0,y); sx.lineTo(8,y); sx.moveTo(W-8,y); sx.lineTo(W,y); sx.stroke();
+    sx.fillStyle= light?'#e6f0fc':'#1f2a37'; sx.textAlign='left'; sx.fillText(`${fmt(z)} m`, 11, y);
+    sx.textAlign='right'; const isKnown = z<=known;
+    sx.fillStyle = isKnown ? (light?'#ffe6a3':'#7a4b00') : (light?'rgba(255,255,255,.55)':'rgba(31,42,55,.5)');
+    sx.fillText(isKnown?atmTxt(1+z/10):'? atm', W-11, y);
+  }
+  // markers for past sea tests
+  state.tests.forEach((r,i)=>{ if(r.kind!=='sea'||r.depth<=0) return; const y=G.y(r.depth); sx.fillStyle = r.reached?'#7ee2a8':'#ff9c8a'; sx.beginPath(); sx.moveTo(W-4,y); sx.lineTo(W-14,y-5); sx.lineTo(W-14,y+5); sx.fill(); });
+  // submarine
+  const z = state.dive ? state.dive.z : null;
+  if (z!==null){
+    const y=G.y(z) + (state.dive.phase==='float'?Math.sin(performance.now()/180)*3-6:0), d=design(), m=MATERIALS[d.mat];
+    const w = d.shape==='cylinder'?30:18, h=d.shape==='cylinder'?14:16;
+    sx.save(); sx.translate(W/2,y);
+    if (state.dive.phase==='fail'){ const f=Math.min(1,state.dive.ft/0.9); sx.scale(1-f*.45,1-f*.6); sx.rotate(f*.4); }
+    sx.fillStyle=m.color; sx.strokeStyle='#1f2a37'; sx.lineWidth=1.5; sx.beginPath();
+    if (d.shape==='sphere') sx.arc(0,0,9,0,7); else if (d.shape==='cylinder' && sx.roundRect) sx.roundRect(-w/2,-h/2,w,h,h/2); else if (d.shape==='cylinder') sx.rect(-w/2,-h/2,w,h); else sx.rect(-8,-8,16,16);
+    sx.fill(); sx.stroke();
+    sx.fillStyle='#1f2a37'; sx.fillRect(w/2-1,-2,5,4);
+    sx.restore();
+    if (state.dive.phase==='fail'){ sx.fillStyle='rgba(255,255,255,.8)'; for(let k=0;k<8;k++){ const t=state.dive.ft; sx.beginPath(); sx.arc(W/2+(seeded(k)-.5)*30, y-t*40*seeded(k+5)-4, 1.5+seeded(k+9)*2.5,0,7); sx.fill(); } }
+  }
+}
+function updateGauge(){
+  if (state.dive){ const z=state.dive.z, p=1+z/10; $('gDepth').textContent=`${fmt(z)} m`; $('gP').textContent=atmTxt(p); $('gPsi').textContent=psiTxt(p); }
+  else { $('gDepth').textContent='0 m (at the lab)'; $('gP').textContent='1 atm'; $('gPsi').textContent=psiTxt(1); }
+}
+
+/* ================= DIVE ================= */
+function startDive(){
+  if (state.dive) return;
+  const d=design(), w=weights(d); if(!w.ok || !w.enough) return;
+  state.broken=null; state.tank=1; $('tankIn').value=1;
+  $('banner').innerHTML='';
+  const f=failDepth(d);
+  const plan = { phase:'down', z:0, zMax:0, ft:0, f, w, d, snap:snap(), last:performance.now() };
+  if (w.net < -PROP_KG){ plan.phase='float'; plan.ft=0; }
+  state.dive=plan; render(); requestAnimationFrame(tick);
+  if (innerWidth<1100){ try{ $('sea').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'}); }catch(e){} }
+}
+function tick(now){
+  const dv=state.dive; if(!dv) return;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const dt=Math.min(0.05,(now-dv.last)/1000); dv.last=now;
+  const speed = reduce ? 1200 : 300; // metres per second of animation
+  if (dv.phase==='float'){ dv.ft+=dt; if (dv.ft>1.6) return finishDive('float'); }
+  else if (dv.phase==='down'){
+    dv.z=Math.min(DOOR, dv.z+speed*dt);
+    if (dv.f && dv.z>=dv.f.depth){ dv.z=dv.f.depth; dv.phase='fail'; dv.ft=0; state.broken={...dv.f, where:'sea'}; }
+    else if (dv.z>=DOOR){ dv.phase = dv.w.net>PROP_KG ? 'stuck' : 'pause'; dv.ft=0; }
+    dv.zMax=Math.max(dv.zMax,dv.z);
+  }
+  else if (dv.phase==='fail'){ dv.ft+=dt; if(dv.ft>1.4) return finishDive('fail'); }
+  else if (dv.phase==='stuck'){ dv.ft+=dt; if(dv.ft>1.4) return finishDive('stuck'); }
+  else if (dv.phase==='pause'){ dv.ft+=dt; if(dv.ft>0.8){ dv.phase='up'; } }
+  else if (dv.phase==='up'){ dv.z=Math.max(0, dv.z-speed*dt); if(dv.z<=0) return finishDive('home'); }
+  render(); requestAnimationFrame(tick);
+}
+function finishDive(outcome){
+  const dv=state.dive, w=dv.w;
+  const roomOK = w.room>=ROOM_M3;
+  const row = { kind:'sea', ...dv.snap, outcome, depth: outcome==='float'?0:(outcome==='fail'?dv.f.depth:DOOR) };
+  if (outcome==='fail'){ row.mode=dv.f.mode; row.part=dv.f.part; row.dir=dv.f.dir; }
+  row.reached = outcome==='stuck'||outcome==='home';
+  row.win = outcome==='home' && roomOK;
+  row.roomOK=roomOK;
+  state.dive=null;
+  if (outcome!=='fail') state.broken=null;
+  record(row);
+  if (row.win) $('banner').innerHTML = `<div class="banner">Test #${state.tests.length} reached the Deep Door and came home, with room for Elise and Edmond inside.</div>`;
+  render();
+}
+
+/* ================= TABLE ================= */
+function record(row){ row.id = state.tests.length+1; state.tests.push(row); save(); }
+function resultText(r){
+  if (r.kind==='tank') return { t:`${partName(r.part)} ${verb(r.mat,r.mode,r.dir)} (${atmTxt(r.tankP)} outside)`, c:'bad' };
+  if (r.outcome==='float') return { t:'Floated. Too light to push under', c:'meh' };
+  if (r.outcome==='fail') return { t:`${partName(r.part)} ${verb(r.mat,r.mode,r.dir)}`, c:'bad' };
+  if (r.outcome==='stuck') return { t:'Reached the door, too heavy to come back', c:'meh' };
+  if (!r.win) return { t:'Round trip, but no room for the crew', c:'meh' };
+  return { t:'Reached the door and came home', c:'ok' };
+}
+function renderTable(){
+  const tb=$('rows');
+  if (!state.tests.length){ tb.innerHTML='<tr><td colspan="11" class="empty">No tests yet. Try the lab tank, or press Test dive.</td></tr>'; return; }
+  tb.innerHTML = state.tests.slice().reverse().map(r=>{
+    const res=resultText(r);
+    const deepest = r.kind==='sea' ? `${fmt(r.depth)} m` : '—';
+    const pr = r.kind==='sea' ? `${atmTxt(1+r.depth/10)} · ${psiTxt(1+r.depth/10)}` : `${atmTxt(r.tankP)} · ${psiTxt(r.tankP)}`;
+    return `<tr class="${r.win?'win':''}"><td>${r.id}</td><td><span class="tag ${r.kind==='sea'?'sea':''}">${r.kind==='sea'?'Sea':'Tank'}</span></td><td>${MATERIALS[r.mat].name}</td><td>${shapeLabel(r)}</td><td class="r">${fmt(r.D,1)} m</td><td class="r">${fmt(r.tcm,1)} cm</td><td class="r">${r.pin===0?'0 (empty)':atmTxt(r.pin)}</td><td class="r">${fmt(r.ballast||0)} kg</td><td class="res ${res.c}">${res.t}</td><td class="r">${deepest}</td><td class="r">${pr}</td></tr>`;
+  }).join('');
+}
+
+/* ================= HINTS ================= */
+const FIELDS = [['mat','material'],['shape','shape'],['n','number of sides'],['D','width'],['tcm','wall thickness'],['pin','air inside'],['ballast','ballast']];
+function diffs(a,b){ return FIELDS.filter(([k])=>{ if(k==='n' && !(a.shape==='prism'&&b.shape==='prism')) return false; return (a[k]||0)!==(b[k]||0); }).map(([,n])=>n); }
+const HINTS = [
+  { main:"Let's start by figuring out a good shape. Pick one material, and then do test runs with each of the shapes. Which shape makes it the farthest?",
+    extra:"If a test floats instead of diving, add ballast until the weight-and-lift meter is in the green, then run it again." },
+  { main:"Now that you've got a shape that makes it the farthest, keep that shape and try different materials. Which material makes it the farthest? (Keep the width and wall thickness the same.)",
+    extra:"If more than one material makes it all the way to the door, make the wall thinner and test them all again. Add ballast to any that float." },
+];
+function showHint(){
+  const i=state.hintStep % HINTS.length, h=HINTS[i]; state.hintStep++;
+  const box=$('hintBox'); box.innerHTML=`<b>Hint ${i+1} of ${HINTS.length}.</b> ${h.main}<span class="extra">${h.extra}</span>`; box.hidden=false;
+  $('hintBtn').textContent = i===HINTS.length-1 ? 'Back to hint 1' : 'Next hint';
+}
+
+/* ================= GO ================= */
+buildChips();
+render();
+let rt; addEventListener('resize',()=>{ clearTimeout(rt); rt=setTimeout(render,80); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(render);
+</script>
+
+</body>
+</html>
