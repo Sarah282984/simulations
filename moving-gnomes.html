@@ -90,10 +90,6 @@
 <div class="app">
   <header>
     <h1>The Moving Gnomes</h1>
-    <div class="tabs" role="tablist">
-      <button class="tab" role="tab" id="tab-intro" aria-selected="true">Introduction</button>
-      <button class="tab" role="tab" id="tab-charts" aria-selected="false">Charts</button>
-    </div>
   </header>
 
   <div class="scene-wrap">
@@ -162,8 +158,6 @@
       <!-- ruler -->
       <g id="ruler"></g>
 
-      <!-- time -->
-      <text id="timeText" x="100" y="44" font-family="Fredoka, Nunito, sans-serif" font-weight="600" font-size="30" fill="#3b2a20">0.00 seconds</text>
 
       <!-- gnomes -->
       <g id="gnome">
@@ -184,7 +178,7 @@
     </svg>
   </div>
 
-  <!-- Introduction tab controls -->
+  <!-- controls -->
   <section class="intro-controls" id="introControls">
     <span class="qlabel x" data-row="x">Position</span>
     <input class="slider x" data-k="x" type="range" min="-10" max="10" step="0.01" value="0" aria-label="Position">
@@ -202,56 +196,8 @@
     <label class="vec"><input type="checkbox" id="showA"> Acceleration vector</label>
   </section>
 
-  <!-- Charts tab -->
-  <section class="charts" id="charts">
-    <div class="chart-row">
-      <div class="chart-ctrl" data-row="x">
-        <span class="qlabel x">Position</span>
-        <span class="numwrap"><input class="num" data-k="x" inputmode="decimal" value="0.00" aria-label="Position in meters"><span class="unit x">m</span></span>
-        <input class="slider x" data-k="x" type="range" min="-10" max="10" step="0.01" value="0" aria-label="Position">
-      </div>
-      <canvas class="chart" id="chart-x"></canvas>
-    </div>
-    <div class="chart-row">
-      <div class="chart-ctrl" data-row="v">
-        <span class="qlabel v">Velocity</span>
-        <span class="numwrap"><input class="num" data-k="v" inputmode="decimal" value="0.00" aria-label="Velocity in meters per second"><span class="unit v">m/s</span></span>
-        <input class="slider v" data-k="v" type="range" min="-6" max="6" step="0.01" value="0" aria-label="Velocity">
-      </div>
-      <canvas class="chart" id="chart-v"></canvas>
-    </div>
-    <div class="chart-row">
-      <div class="chart-ctrl" data-row="a">
-        <span class="qlabel a">Acceleration</span>
-        <span class="numwrap"><input class="num" data-k="a" inputmode="decimal" value="0.00" aria-label="Acceleration in meters per second squared"><span class="unit a">m/s²</span></span>
-        <input class="slider a" data-k="a" type="range" min="-6" max="6" step="0.01" value="0" aria-label="Acceleration">
-      </div>
-      <canvas class="chart" id="chart-a"></canvas>
-    </div>
-  </section>
-
   <section class="playbar">
-    <input class="timeline" id="timeline" type="range" min="0" max="20" step="0.001" value="0" aria-label="Recorded time">
-    <div class="pb-row">
-      <div class="group">
-        <button class="btn" id="clearBtn">Clear</button>
-        <div class="radios">
-          <label><input type="radio" name="mode" id="recRadio" checked> Record</label>
-          <label><input type="radio" name="mode" id="playRadio"> Playback</label>
-        </div>
-      </div>
-      <div class="group">
-        <button class="btn round" id="rewindBtn" aria-label="Rewind to start">
-          <svg width="20" height="18" viewBox="0 0 20 18"><rect x="1" y="2" width="3" height="14" fill="currentColor"/><path d="M19 2 V16 L5 9 Z" fill="currentColor"/></svg>
-        </button>
-        <button class="btn round big" id="playBtn" aria-label="Play">
-          <svg id="playIcon" width="22" height="24" viewBox="0 0 22 24"><path d="M3 2 L20 12 L3 22 Z" fill="currentColor"/></svg>
-          <svg id="pauseIcon" width="22" height="24" viewBox="0 0 22 24" style="display:none"><rect x="3" y="2" width="6" height="20" fill="currentColor"/><rect x="13" y="2" width="6" height="20" fill="currentColor"/></svg>
-        </button>
-        <button class="btn round" id="stepBtn" aria-label="Step forward">
-          <svg width="20" height="18" viewBox="0 0 20 18"><path d="M1 2 V16 L15 9 Z" fill="currentColor"/><rect x="16" y="2" width="3" height="14" fill="currentColor"/></svg>
-        </button>
-      </div>
+    <div class="pb-row" style="justify-content:flex-end">
       <div class="group">
         <div class="checks">
           <label><input type="checkbox" id="wallsChk" checked> Walls</label>
@@ -260,27 +206,22 @@
         <button class="btn" id="resetBtn">Reset All</button>
       </div>
     </div>
-    <div class="status" id="status"></div>
   </section>
   <footer>Inspired by <em>The Moving Man</em> from PhET Interactive Simulations, University of Colorado Boulder. Gnome art © Sarah Allen.</footer>
 </div>
 
 <script>
 (() => {
-  const DT = 1/30, MAXT = 20, XMAX = 10;
-  const RANGE = { x: 10, v: 6, a: 6 };
+  const DT = 1/60, XMAX = 10;
   const GROUND = 250, PX0 = 500, PPM = 38;   // scene: 38 px per meter, 0 m at x=500
   const px = x => PX0 + x * PPM;
   const toWorld = p => (p - PX0) / PPM;
 
-  const S = { x:0, v:0, a:0, mode:'x', t:0, playing:false, record:true, walls:true, sound:true, showV:false, showA:false, facing:1 };
-  let rec = [];          // samples every DT: {x,v,a}
-  let playhead = 0;
+  const S = { x:0, v:0, a:0, mode:'x', t:0, walls:true, sound:true, showV:false, showA:false, facing:1 };
   let targetX = 0;
-  let xh = [], vh = [];  // history for derivatives in position mode
+  let xh = [], vh = [];  // short history, used to work out velocity and acceleration while the gnomes are dragged
   let dragging = false;
   let bonkAt = -1;
-  let tab = 'intro';
 
   const $ = s => document.querySelector(s);
   const $$ = s => Array.from(document.querySelectorAll(s));
@@ -300,7 +241,6 @@
 
   // ---------- helpers ----------
   const fmt = n => { const r = Math.round(n * 100) / 100; return (r === 0 ? 0 : r).toFixed(2); };
-  const recLen = () => rec.length ? (rec.length - 1) * DT : 0;
   const clampX = x => S.walls ? Math.max(-XMAX, Math.min(XMAX, x)) : Math.max(-999, Math.min(999, x));
   function slope(arr, key, win) {
     if (arr.length < 2) return 0;
@@ -311,6 +251,7 @@
     const d = n*stt - st*st; return (n < 2 || d === 0) ? 0 : (n*sty - st*sy) / d;
   }
   const trim = (arr, t) => { while (arr.length && t - arr[0].t > 0.5) arr.shift(); };
+  function resetHistory() { xh = [{ t: S.t, x: S.x }]; vh = [{ t: S.t, v: S.v }]; }
 
   // ---------- sound ----------
   let ac = null;
@@ -326,12 +267,11 @@
     } catch (e) {}
   }
 
-  // ---------- model ----------
+  // ---------- model (always running) ----------
   function setMode(m) {
-    if (m === 'x' && S.mode !== 'x') { xh = [{ t: S.t, x: S.x }]; vh = [{ t: S.t, v: S.v }]; targetX = S.x; }
+    if (m === 'x' && S.mode !== 'x') { resetHistory(); targetX = S.x; }
     S.mode = m;
   }
-  function snapshot() { return { x: S.x, v: S.v, a: S.a }; }
 
   function step() {
     const t = S.t + DT;
@@ -341,6 +281,8 @@
       S.v = slope(xh, 'x', 0.25);
       vh.push({ t, v: S.v }); trim(vh, t);
       S.a = slope(vh, 'v', 0.3);
+      if (Math.abs(S.v) < 0.005) S.v = 0;
+      if (Math.abs(S.a) < 0.005) S.a = 0;
     } else if (S.mode === 'v') {
       S.x += S.v * DT; S.a = 0;
     } else {
@@ -351,50 +293,16 @@
       if (S.mode !== 'x') { if (Math.abs(S.v) > 0.3) bonk(); S.v = 0; }
     }
     S.t = t;
-    rec.push(snapshot());
-    if (S.t >= MAXT - 1e-9) { S.t = MAXT; pause(); status('Recording is full (20 seconds). Press Clear to record again, or switch to Playback.'); }
   }
-
-  function applySample(i) {
-    const s = rec[Math.max(0, Math.min(rec.length - 1, i))]; if (!s) return;
-    S.x = s.x; S.v = s.v; S.a = s.a;
-  }
-
-  // If the student changes something while watching a playback, take over from that moment (like PhET).
-  function takeControl() {
-    if (S.record) return;
-    if (rec.length) {
-      const i = Math.round(playhead / DT);
-      rec.length = i + 1; S.t = i * DT; applySample(i);
-    }
-    S.record = true; $('#recRadio').checked = true;
-    if (S.mode === 'x') { xh = [{ t: S.t, x: S.x }]; vh = [{ t: S.t, v: S.v }]; targetX = S.x; }
-  }
-
-  function play() {
-    status('');
-    if (S.record) {
-      if (S.t >= MAXT - 1e-9) { status('Recording is full (20 seconds). Press Clear to record again, or switch to Playback.'); return; }
-      if (!rec.length) rec.push(snapshot());
-      if (S.mode === 'x') { xh = [{ t: S.t, x: S.x }]; vh = [{ t: S.t, v: S.v }]; }
-    } else {
-      if (rec.length < 2) return;
-      if (playhead >= recLen() - 1e-9) playhead = 0;
-    }
-    S.playing = true; syncButtons();
-  }
-  function pause() { S.playing = false; syncButtons(); }
 
   // ---------- input from controls ----------
+  // opts.jump: the position was typed in, so move the gnomes there without a burst of speed
   function userSet(k, val, opts = {}) {
     if (!isFinite(val)) return;
-    takeControl();
-    status('');
     if (k === 'x') {
       setMode('x');
       targetX = clampX(val);
-      if (opts.autoplay && !S.playing && S.t < MAXT - 1e-9) play();
-      if (!S.playing) { S.x = targetX; S.v = 0; S.a = 0; }
+      if (opts.jump) { S.x = targetX; S.v = 0; S.a = 0; resetHistory(); }
     } else if (k === 'v') {
       setMode('v'); S.v = val; S.a = 0;
     } else {
@@ -407,12 +315,12 @@
     el.addEventListener('pointerup', () => el._held = false);
     el.addEventListener('pointercancel', () => el._held = false);
     el.addEventListener('blur', () => el._held = false);
-    el.addEventListener('input', () => userSet(el.dataset.k, parseFloat(el.value), { autoplay: el.dataset.k === 'x' && el._held }));
+    el.addEventListener('input', () => userSet(el.dataset.k, parseFloat(el.value)));
   });
   $$('.num').forEach(el => {
     el.addEventListener('change', () => {
       const v = parseFloat(el.value.replace(',', '.'));
-      if (isFinite(v)) userSet(el.dataset.k, v);
+      if (isFinite(v)) userSet(el.dataset.k, v, { jump: true });
       el.blur();
     });
     el.addEventListener('keydown', e => { if (e.key === 'Enter') el.blur(); if (e.key === 'Escape') { el.value = fmt(S[el.dataset.k]); el.blur(); } });
@@ -427,80 +335,29 @@
     e.preventDefault(); dragging = true; gnome.classList.add('dragging');
     svg.setPointerCapture(e.pointerId);
     grabOffset = toWorld(svgX(e)) - S.x;
-    userSet('x', S.x, { autoplay: true });
+    userSet('x', S.x);
   });
-  svg.addEventListener('pointermove', e => { if (dragging) userSet('x', toWorld(svgX(e)) - grabOffset, { autoplay: true }); });
+  svg.addEventListener('pointermove', e => { if (dragging) userSet('x', toWorld(svgX(e)) - grabOffset); });
   const endDrag = () => { dragging = false; gnome.classList.remove('dragging'); };
   svg.addEventListener('pointerup', endDrag); svg.addEventListener('pointercancel', endDrag);
 
-  // walls
+  // walls, sound, vectors, reset
   function setWalls(on) {
     S.walls = on; $('#wallsChk').checked = on;
     $('#wallL').style.display = $('#wallR').style.display = on ? '' : 'none';
-    if (on && Math.abs(S.x) > XMAX) { takeControl(); S.x = clampX(S.x); targetX = clampX(targetX); S.v = 0; }
+    if (on && Math.abs(S.x) > XMAX) { S.x = clampX(S.x); targetX = clampX(targetX); S.v = 0; resetHistory(); }
   }
   $$('.wallx').forEach(b => b.addEventListener('click', () => setWalls(false)));
   $('#wallsChk').addEventListener('change', e => setWalls(e.target.checked));
   $('#soundChk').addEventListener('change', e => S.sound = e.target.checked);
   $('#showV').addEventListener('change', e => S.showV = e.target.checked);
   $('#showA').addEventListener('change', e => S.showA = e.target.checked);
-
-  // playback bar
-  $('#playBtn').addEventListener('click', () => S.playing ? pause() : play());
-  $('#rewindBtn').addEventListener('click', () => {
-    if (!rec.length) return;
-    pause(); S.record = false; $('#playRadio').checked = true; playhead = 0; applySample(0);
-  });
-  $('#stepBtn').addEventListener('click', () => {
-    pause();
-    if (S.record) {
-      if (S.t >= MAXT - 1e-9) return;
-      if (!rec.length) rec.push(snapshot());
-      step();
-    } else if (rec.length) {
-      playhead = Math.min(playhead + DT, recLen()); applySample(Math.round(playhead / DT));
-    }
-  });
-  $('#clearBtn').addEventListener('click', () => {
-    pause(); rec = []; S.t = 0; playhead = 0; S.record = true; $('#recRadio').checked = true;
-    xh = [{ t: 0, x: S.x }]; vh = [{ t: 0, v: S.v }]; status('');
-  });
-  $('#recRadio').addEventListener('change', () => { pause(); takeControl(); });
-  $('#playRadio').addEventListener('change', () => {
-    pause(); S.record = false; playhead = recLen(); if (rec.length) applySample(rec.length - 1);
-  });
-  $('#timeline').addEventListener('input', e => {
-    if (rec.length < 2) { e.target.value = 0; return; }
-    pause(); S.record = false; $('#playRadio').checked = true;
-    playhead = Math.min(parseFloat(e.target.value), recLen());
-    applySample(Math.round(playhead / DT));
-  });
   $('#resetBtn').addEventListener('click', () => {
-    pause(); rec = []; playhead = 0;
-    Object.assign(S, { x:0, v:0, a:0, mode:'x', t:0, record:true, showV:false, showA:false, facing:1 });
-    targetX = 0; xh = []; vh = [];
-    $('#recRadio').checked = true; $('#showV').checked = false; $('#showA').checked = false;
-    $('#soundChk').checked = true; S.sound = true; setWalls(true); status('');
+    Object.assign(S, { x:0, v:0, a:0, mode:'x', showV:false, showA:false, facing:1 });
+    targetX = 0; resetHistory();
+    $('#showV').checked = false; $('#showA').checked = false;
+    $('#soundChk').checked = true; S.sound = true; setWalls(true);
   });
-
-  // tabs
-  function setTab(t) {
-    tab = t;
-    $('#tab-intro').setAttribute('aria-selected', t === 'intro');
-    $('#tab-charts').setAttribute('aria-selected', t === 'charts');
-    $('#introControls').classList.toggle('off', t !== 'intro');
-    $('#charts').classList.toggle('on', t === 'charts');
-    if (t === 'charts') sizeCharts();
-  }
-  $('#tab-intro').addEventListener('click', () => setTab('intro'));
-  $('#tab-charts').addEventListener('click', () => setTab('charts'));
-
-  function status(msg) { $('#status').textContent = msg; }
-  function syncButtons() {
-    $('#playIcon').style.display = S.playing ? 'none' : '';
-    $('#pauseIcon').style.display = S.playing ? '' : 'none';
-    $('#playBtn').setAttribute('aria-label', S.playing ? 'Pause' : 'Play');
-  }
 
   // ---------- rendering ----------
   function arrowPath(x0, y, len) {
@@ -524,9 +381,6 @@
     $('#gnomeArt').setAttribute('transform', `scale(${S.facing * (2 - sq)},${sq})`);
     $('#posMarker').setAttribute('transform', `translate(${p.toFixed(2)},262)`);
 
-    const time = S.record ? S.t : playhead;
-    $('#timeText').textContent = `${time.toFixed(2)} seconds`;
-
     setArrow('#vArrow', S.showV, p, 52, S.v * 20);
     setArrow('#aArrow', S.showA, p, 26, S.a * 20);
 
@@ -546,69 +400,19 @@
     const focused = document.activeElement;
     $$('.num').forEach(el => { if (el !== focused) el.value = fmt(S[el.dataset.k]); });
     $$('.slider').forEach(el => { if (!el._held) el.value = S[el.dataset.k]; });
-    $$('[data-row]').forEach(el => el.classList.toggle(el.classList.contains('chart-ctrl') ? 'row-active' : 'active', S.record && el.dataset.row === S.mode));
-    const tl = $('#timeline');
-    if (document.activeElement !== tl || S.playing) tl.value = S.record ? S.t : playhead;
-    tl.style.setProperty('--rec', (recLen() / MAXT * 100) + '%');
-  }
-
-  // charts
-  const charts = { x: $('#chart-x'), v: $('#chart-v'), a: $('#chart-a') };
-  const COLORS = { x: '#2457c5', v: '#cf3a2c', a: '#2d8a3c' };
-  const UNITS = { x: 'm', v: 'm/s', a: 'm/s²' };
-  function sizeCharts() {
-    const dpr = window.devicePixelRatio || 1;
-    for (const k in charts) { const c = charts[k]; c.width = Math.round(c.clientWidth * dpr); c.height = Math.round(c.clientHeight * dpr); c._dpr = dpr; }
-  }
-  window.addEventListener('resize', () => { if (tab === 'charts') sizeCharts(); });
-  function drawChart(k) {
-    const c = charts[k], ctx = c.getContext('2d'), dpr = c._dpr || 1;
-    const W = c.width / dpr, H = c.height / dpr; if (!W || !H) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
-    const L = 44, R = 10, T = 10, B = 22, w = W - L - R, h = H - T - B, Y = RANGE[k];
-    const sx = t => L + t / MAXT * w, sy = y => T + (1 - (y + Y) / (2 * Y)) * h;
-    ctx.font = '600 11px Nunito, sans-serif'; ctx.fillStyle = '#6b5646'; ctx.strokeStyle = '#eee4cf'; ctx.lineWidth = 1;
-    for (let t = 0; t <= MAXT; t += 2) { ctx.beginPath(); ctx.moveTo(sx(t), T); ctx.lineTo(sx(t), T + h); ctx.stroke(); ctx.textAlign = 'center'; ctx.fillText(t, sx(t), H - 6); }
-    const ticks = k === 'x' ? [-10, -5, 0, 5, 10] : [-6, -3, 0, 3, 6];
-    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-    for (const y of ticks) { ctx.strokeStyle = y === 0 ? '#9c8a6e' : '#eee4cf'; ctx.beginPath(); ctx.moveTo(L, sy(y)); ctx.lineTo(L + w, sy(y)); ctx.stroke(); ctx.fillText(y, L - 6, sy(y)); }
-    ctx.textBaseline = 'alphabetic';
-    ctx.save(); ctx.translate(11, T + h / 2); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.fillStyle = COLORS[k]; ctx.fillText(UNITS[k], 0, 0); ctx.restore();
-    ctx.textAlign = 'right'; ctx.fillStyle = '#6b5646'; ctx.fillText('time (s)', L + w, T + 10);
-    ctx.save(); ctx.beginPath(); ctx.rect(L, T, w, h); ctx.clip();
-    if (rec.length > 1) {
-      ctx.strokeStyle = COLORS[k]; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.beginPath();
-      rec.forEach((s, i) => { const X = sx(i * DT), Yp = sy(s[k]); i ? ctx.lineTo(X, Yp) : ctx.moveTo(X, Yp); });
-      ctx.stroke();
-    }
-    const tc = S.record ? S.t : playhead;
-    ctx.strokeStyle = '#3b2a20'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
-    ctx.beginPath(); ctx.moveTo(sx(tc), T); ctx.lineTo(sx(tc), T + h); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle = COLORS[k]; ctx.strokeStyle = '#3b2a20'; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(sx(tc), sy(S[k]), 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.restore();
+    $$('[data-row]').forEach(el => el.classList.toggle('active', el.dataset.row === S.mode));
   }
 
   // ---------- loop ----------
   let last = performance.now(), acc = 0;
   function frame(now) {
     let el = (now - last) / 1000; last = now; if (el > 0.25) el = 0.25;
-    if (S.playing) {
-      acc += el;
-      while (acc >= DT && S.playing) {
-        acc -= DT;
-        if (S.record) step();
-        else {
-          playhead = Math.min(playhead + DT, recLen()); applySample(Math.round(playhead / DT));
-          if (playhead >= recLen() - 1e-9) pause();
-        }
-      }
-    } else acc = 0;
+    acc += el;
+    while (acc >= DT) { acc -= DT; step(); }
     renderScene(); renderControls();
-    if (tab === 'charts') { drawChart('x'); drawChart('v'); drawChart('a'); }
     requestAnimationFrame(frame);
   }
-  syncButtons();
+  resetHistory();
   requestAnimationFrame(frame);
 })();
 </script>
