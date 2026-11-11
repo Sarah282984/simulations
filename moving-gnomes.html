@@ -24,6 +24,12 @@
   .scene-wrap{border-bottom:2px solid var(--ink);background:#bfe3f2;touch-action:none}
   #scene{display:block;width:100%;height:auto;user-select:none;-webkit-user-select:none}
   #gnome{cursor:grab}
+  .grab{cursor:grab}
+  .sw-btn{cursor:pointer}
+  .sw-btn:focus{outline:none}
+  .sw-btn:focus-visible rect{stroke-width:3.5}
+  .tools{display:flex;align-items:center;gap:14px;font-weight:600;flex-wrap:wrap}
+  .tools .lbl{color:var(--ink-soft)}
   #gnome.dragging{cursor:grabbing}
   .wallx{cursor:pointer}
 
@@ -93,7 +99,7 @@
   </header>
 
   <div class="scene-wrap">
-    <svg id="scene" viewBox="0 0 1000 330" aria-label="Gnomes standing on a number line from minus 10 to 10 meters">
+    <svg id="scene" viewBox="0 0 1000 360" aria-label="Gnomes standing on a number line from minus 10 to 10 meters">
       <defs>
         <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stop-color="#a9d8ee"/><stop offset="1" stop-color="#dff1f4"/>
@@ -114,7 +120,7 @@
         <ellipse cx="330" cy="70" rx="46" ry="16"/><ellipse cx="360" cy="60" rx="30" ry="16"/>
         <ellipse cx="690" cy="48" rx="40" ry="13"/><ellipse cx="716" cy="40" rx="24" ry="13"/>
       </g>
-      <rect x="0" y="250" width="1000" height="80" fill="url(#meadow)"/>
+      <rect x="0" y="250" width="1000" height="110" fill="url(#meadow)"/>
 
       <!-- tree at -8 m -->
       <g transform="translate(196,250)" stroke="#3b2a20" stroke-width="3" stroke-linejoin="round">
@@ -175,6 +181,49 @@
         <rect id="offbox" x="0" y="150" width="150" height="34" rx="8" fill="#fff" stroke="#3b2a20" stroke-width="2"/>
         <text id="offtext" x="0" y="173"></text>
       </g>
+      <!-- tape measure -->
+      <g id="tape">
+        <line id="tapeLineBack" stroke="#3b2a20" stroke-width="8" stroke-linecap="round"/>
+        <line id="tapeLine" stroke="#f2c84b" stroke-width="5" stroke-linecap="round"/>
+        <g id="tapeTicks" stroke="#3b2a20" stroke-width="1.3"></g>
+        <g id="tapeCase" class="grab">
+          <g id="tapeCaseBody">
+            <circle r="19" fill="#d9483b" stroke="#3b2a20" stroke-width="2.5"/>
+            <circle r="7" fill="#f2c84b" stroke="#3b2a20" stroke-width="2"/>
+          </g>
+          <g id="tapeBase">
+            <circle r="9" fill="transparent"/>
+            <line x1="0" y1="-11" x2="0" y2="11" stroke="#3b2a20" stroke-width="2"/>
+            <circle r="2.6" fill="#3b2a20"/>
+          </g>
+          <title>Drag to move the tape measure</title>
+        </g>
+        <g id="tapeTip" class="grab">
+          <circle r="15" fill="transparent"/>
+          <line x1="0" y1="-11" x2="0" y2="11" stroke="#3b2a20" stroke-width="2"/>
+          <circle r="4" fill="#3b2a20"/>
+          <title>Drag to pull out the tape</title>
+        </g>
+        <g id="tapeLabel" pointer-events="none">
+          <rect id="tapeLabelBox" height="22" rx="6" fill="#fff" stroke="#3b2a20" stroke-width="1.8"/>
+          <text id="tapeLabelText" font-family="Nunito, sans-serif" font-weight="700" font-size="15" fill="#3b2a20" text-anchor="middle"></text>
+        </g>
+      </g>
+
+      <!-- stopwatch -->
+      <g id="stopwatch">
+        <rect class="grab" width="176" height="82" rx="12" fill="#2f6468" stroke="#3b2a20" stroke-width="2.5"/>
+        <rect class="grab" x="10" y="9" width="156" height="35" rx="6" fill="#fbf6e9" stroke="#3b2a20" stroke-width="2"/>
+        <text id="swText" class="grab" x="154" y="35" text-anchor="end" font-family="Nunito, sans-serif" font-weight="700" font-size="23" fill="#3b2a20" style="font-variant-numeric:tabular-nums">0.00 s</text>
+        <g id="swStart" class="sw-btn" role="button" tabindex="0" aria-label="Start stopwatch" transform="translate(10,51)">
+          <rect width="74" height="24" rx="6" fill="#fff" stroke="#3b2a20" stroke-width="2"/>
+          <text id="swStartText" x="37" y="17" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="700" font-size="14" fill="#3b2a20">Start</text>
+        </g>
+        <g id="swReset" class="sw-btn" role="button" tabindex="0" aria-label="Reset stopwatch" transform="translate(92,51)">
+          <rect width="74" height="24" rx="6" fill="#fff" stroke="#3b2a20" stroke-width="2"/>
+          <text x="37" y="17" text-anchor="middle" font-family="Nunito, sans-serif" font-weight="700" font-size="14" fill="#3b2a20">Reset</text>
+        </g>
+      </g>
     </svg>
   </div>
 
@@ -197,7 +246,12 @@
   </section>
 
   <section class="playbar">
-    <div class="pb-row" style="justify-content:flex-end">
+    <div class="pb-row">
+      <div class="tools">
+        <span class="lbl">Tools:</span>
+        <label><input type="checkbox" id="swChk" checked> Stopwatch</label>
+        <label><input type="checkbox" id="tapeChk" checked> Tape measure</label>
+      </div>
       <div class="group">
         <div class="checks">
           <label><input type="checkbox" id="wallsChk" checked> Walls</label>
@@ -293,6 +347,7 @@
       if (S.mode !== 'x') { if (Math.abs(S.v) > 0.3) bonk(); S.v = 0; }
     }
     S.t = t;
+    if (SW.running) SW.t += DT;
   }
 
   // ---------- input from controls ----------
@@ -341,6 +396,103 @@
   const endDrag = () => { dragging = false; gnome.classList.remove('dragging'); };
   svg.addEventListener('pointerup', endDrag); svg.addEventListener('pointercancel', endDrag);
 
+
+  // ---------- measuring tools ----------
+  const VBW = 1000, VBH = 360;
+  const clampV = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  function svgPt(e) { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const q = p.matrixTransform(svg.getScreenCTM().inverse()); return { x: q.x, y: q.y }; }
+  let toolDrag = null;
+  function startToolDrag(e, onMove) {
+    e.preventDefault(); e.stopPropagation();
+    svg.setPointerCapture(e.pointerId);
+    toolDrag = onMove; e.currentTarget.classList.add('dragging');
+    toolDrag.el = e.currentTarget;
+  }
+
+  // stopwatch
+  const SW_HOME = { x: 14, y: 10 };
+  const SW = { t: 0, running: false, x: SW_HOME.x, y: SW_HOME.y };
+  const swEl = $('#stopwatch');
+  function placeStopwatch() { swEl.setAttribute('transform', `translate(${SW.x.toFixed(1)},${SW.y.toFixed(1)})`); }
+  function swToggle() { SW.running = !SW.running; }
+  function swReset() { SW.running = false; SW.t = 0; }
+  swEl.addEventListener('pointerdown', e => {
+    if (e.target.closest('.sw-btn')) return;
+    const p = svgPt(e), dx = p.x - SW.x, dy = p.y - SW.y;
+    startToolDrag(e, q => { SW.x = clampV(q.x - dx, 0, VBW - 176); SW.y = clampV(q.y - dy, 0, VBH - 82); placeStopwatch(); });
+  });
+  for (const [id, fn] of [['#swStart', swToggle], ['#swReset', swReset]]) {
+    const b = $(id);
+    b.addEventListener('click', fn);
+    b.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } });
+  }
+  function renderStopwatch() {
+    $('#swText').textContent = `${SW.t.toFixed(2)} s`;
+    $('#swStartText').textContent = SW.running ? 'Stop' : 'Start';
+    $('#swStart').setAttribute('aria-label', SW.running ? 'Stop stopwatch' : 'Start stopwatch');
+  }
+
+  // tape measure: base (where measuring starts, with the case behind it) and tip
+  const TAPE_HOME = { bx: px(-9), by: 322, tx: px(-6), ty: 322 };
+  const TP = { ...TAPE_HOME };
+  const NS = 'http://www.w3.org/2000/svg';
+  function renderTape() {
+    const dx = TP.tx - TP.bx, dy = TP.ty - TP.by, len = Math.hypot(dx, dy);
+    const ang = len > 0.5 ? Math.atan2(dy, dx) : 0, ux = Math.cos(ang), uy = Math.sin(ang), deg = ang * 180 / Math.PI;
+    for (const id of ['#tapeLine', '#tapeLineBack']) {
+      const l = $(id); l.setAttribute('x1', TP.bx); l.setAttribute('y1', TP.by); l.setAttribute('x2', TP.tx); l.setAttribute('y2', TP.ty);
+    }
+    $('#tapeBase').setAttribute('transform', `translate(${TP.bx},${TP.by}) rotate(${deg})`);
+    $('#tapeCaseBody').setAttribute('transform', `translate(${TP.bx - 26 * ux},${TP.by - 26 * uy})`);
+    $('#tapeTip').setAttribute('transform', `translate(${TP.tx},${TP.ty}) rotate(${deg})`);
+    // tick marks every half meter
+    const g = $('#tapeTicks'); g.textContent = '';
+    const meters = len / PPM;
+    for (let k = 0.5; k < meters - 0.05; k += 0.5) {
+      const big = Math.abs(k - Math.round(k)) < 1e-6, s = big ? 5 : 3;
+      const cx = TP.bx + k * PPM * ux, cy = TP.by + k * PPM * uy;
+      const l = document.createElementNS(NS, 'line');
+      l.setAttribute('x1', cx - s * uy); l.setAttribute('y1', cy + s * ux); l.setAttribute('x2', cx + s * uy); l.setAttribute('y2', cy - s * ux);
+      g.appendChild(l);
+    }
+    // length label, kept inside the scene
+    const txt = $('#tapeLabelText'); txt.textContent = `${meters.toFixed(2)} m`;
+    const w = txt.getComputedTextLength() + 16;
+    let mx = (TP.bx + TP.tx) / 2, my = Math.min(TP.by, TP.ty) - 24;
+    if (my < 14) my = Math.max(TP.by, TP.ty) + 28;
+    mx = clampV(mx, w / 2 + 4, VBW - w / 2 - 4);
+    txt.setAttribute('x', mx); txt.setAttribute('y', my + 5);
+    const box = $('#tapeLabelBox'); box.setAttribute('x', mx - w / 2); box.setAttribute('y', my - 11); box.setAttribute('width', w);
+  }
+  $('#tapeCase').addEventListener('pointerdown', e => {
+    const p = svgPt(e), ox = p.x - TP.bx, oy = p.y - TP.by;
+    startToolDrag(e, q => {
+      const nbx = clampV(q.x - ox, 0, VBW), nby = clampV(q.y - oy, 0, VBH);
+      const ddx = nbx - TP.bx, ddy = nby - TP.by;
+      TP.bx = nbx; TP.by = nby; TP.tx = clampV(TP.tx + ddx, 0, VBW); TP.ty = clampV(TP.ty + ddy, 0, VBH);
+      renderTape();
+    });
+  });
+  $('#tapeTip').addEventListener('pointerdown', e => {
+    const p = svgPt(e), ox = p.x - TP.tx, oy = p.y - TP.ty;
+    startToolDrag(e, q => { TP.tx = clampV(q.x - ox, 0, VBW); TP.ty = clampV(q.y - oy, 0, VBH); renderTape(); });
+  });
+  svg.addEventListener('pointermove', e => { if (toolDrag) toolDrag(svgPt(e)); });
+  const endToolDrag = () => { if (toolDrag && toolDrag.el) toolDrag.el.classList.remove('dragging'); toolDrag = null; };
+  svg.addEventListener('pointerup', endToolDrag); svg.addEventListener('pointercancel', endToolDrag);
+
+  function setToolVisibility() {
+    swEl.style.display = $('#swChk').checked ? '' : 'none';
+    $('#tape').style.display = $('#tapeChk').checked ? '' : 'none';
+  }
+  $('#swChk').addEventListener('change', setToolVisibility);
+  $('#tapeChk').addEventListener('change', () => { setToolVisibility(); renderTape(); });
+  function resetTools() {
+    swReset(); Object.assign(SW, SW_HOME); Object.assign(TP, TAPE_HOME);
+    $('#swChk').checked = true; $('#tapeChk').checked = true; setToolVisibility();
+    placeStopwatch(); renderTape();
+  }
+
   // walls, sound, vectors, reset
   function setWalls(on) {
     S.walls = on; $('#wallsChk').checked = on;
@@ -357,6 +509,7 @@
     targetX = 0; resetHistory();
     $('#showV').checked = false; $('#showA').checked = false;
     $('#soundChk').checked = true; S.sound = true; setWalls(true);
+    resetTools();
   });
 
   // ---------- rendering ----------
@@ -409,10 +562,12 @@
     let el = (now - last) / 1000; last = now; if (el > 0.25) el = 0.25;
     acc += el;
     while (acc >= DT) { acc -= DT; step(); }
-    renderScene(); renderControls();
+    renderScene(); renderControls(); renderStopwatch();
     requestAnimationFrame(frame);
   }
   resetHistory();
+  placeStopwatch(); renderTape();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(renderTape);
   requestAnimationFrame(frame);
 })();
 </script>
